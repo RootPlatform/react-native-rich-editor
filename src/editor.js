@@ -275,6 +275,134 @@ function createHTML(options = {}) {
             }
         }
 
+        // Strip and flatten markup to start with a clean slate for markdown parsing
+        function stripHTMLAndFlatten(element) {
+            let changed = true;
+            // Flatten until no changes are made
+            while (changed) {
+                changed = flattenOnePass(element);
+            }
+        }
+
+        // Single pass that flattens current markup.
+        // Returns true if it flattened something, meaning we might need another pass.
+        function flattenOnePass(element) {
+            let child = element.firstChild;
+            let didChange = false;
+            const ALLOWED_TAGS = ["DIV", "BR"];
+
+            while (child) {
+                const next = child.nextSibling;
+                if (child.nodeType === Node.ELEMENT_NODE) {
+                const tagName = child.nodeName.toUpperCase();
+
+                if (!ALLOWED_TAGS.includes(tagName)) {
+                    // Flatten: move its children up, remove the node
+                    didChange = true;
+                    while (child.firstChild) {
+                    element.insertBefore(child.firstChild, child);
+                    }
+                    element.removeChild(child);
+                } else {
+                    // Recurse into allowed tags
+                    if (flattenOnePass(child)) didChange = true;
+                }
+                }
+                child = next;
+            }
+            return didChange;
+        }
+
+        function styleAndPreserveMarkdown() {
+            const div = editor.content;
+            const selection = window.getSelection();
+            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+            // Save cursor position
+            let cursorOffset = 0;
+            if (range) {
+                const preRange = document.createRange();
+                preRange.setStart(div, 0);
+                preRange.setEnd(range.startContainer, range.startOffset);
+                cursorOffset = preRange.toString().length;
+            }
+
+            const editorHTML = div.innerHTML;
+            console.debug("starting html", editorHTML);
+
+            // Create a temporary div to operate on
+            const tempRoot = document.createElement("div");
+            tempRoot.innerHTML = editorHTML;
+
+            // Flatten all elements leaving only allowed <div>, <br>, and text nodes
+            stripHTMLAndFlatten(tempRoot);
+
+            // Convert it to a string for the markdown parsing.
+            const flattenedHTML = tempRoot.innerHTML;
+            console.debug("flattened HTML:", flattenedHTML)
+
+            // Apply styling and preserve markdown
+            const parsedHTML = flattenedHTML.replace(
+                /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g,
+                function(match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent) {
+                    if (boldItalic) {
+                        return '<span class="markdown-tag">' + boldItalic + '</span>' +
+                                '<b><i>' + biContent + '</b></i>' +
+                                '<span class="markdown-tag">' + boldItalic + '</span>';
+                    } else if (bold) {
+                        return '<span class="markdown-tag">' + bold + '</span>' +
+                                '<b>' + bContent + '</b>' +
+                                '<span class="markdown-tag">' + bold + '</span>';
+                    } else if (italic) {
+                        return '<span class="markdown-tag">' + italic + '</span>' +
+                                '<i>' + iContent + '<i>' +
+                                '<span class="markdown-tag">' + italic + '</span>';
+                    } else if (strike) {
+                        return '<span class="markdown-tag">' + strike + '</span>' +
+                                '<span style="text-decoration: line-through;">' + sContent + '</span>' +
+                                '<span class="markdown-tag">' + strike + '</span>';
+                    }
+                    return match;
+                }
+            );
+
+            div.innerHTML = parsedHTML;
+            console.debug('parsed HTML', parsedHTML)
+
+            // Restore cursor position
+            const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
+            let currentOffset = 0;
+            let found = false;
+            let node;
+
+            while ((node = walker.nextNode())) {
+                const nextOffset = currentOffset + node.length;
+                // Stop if our cursorOffset is strictly less
+                // than the nextOffset (meaning it's "inside" this text node).
+                if (cursorOffset < nextOffset) {
+                    const offsetInNode = cursorOffset - currentOffset;
+                    if (range) {
+                    range.setStart(node, offsetInNode);
+                    range.setEnd(node, offsetInNode);
+                    }
+                    found = true;
+                    break;
+                }
+            currentOffset = nextOffset;
+            }
+
+            // If we never found a text node to place the cursor in,
+            // collapse the selection at the end of the content and place cursor at the end.
+            selection.removeAllRanges();
+                if (range) {
+                if (!found) {
+                    range.selectNodeContents(div);
+                    range.collapse(false).
+                }
+                selection.addRange(range);
+            }
+        }
+  
         var Actions = {
             bold: { state: function() { return queryCommandState('bold'); }, result: function() { return exec('bold'); }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
@@ -555,6 +683,7 @@ function createHTML(options = {}) {
                 saveSelection();
                 handleChange(_ref);
                 settings.onChange();
+                styleAndPreserveMarkdown()
                 ${inputListener} && postAction({type: "ON_INPUT", data: {inputType: _ref.inputType, data: _ref.data}});
             };
             appendChild(settings.element, content);
@@ -725,6 +854,7 @@ function createHTML(options = {}) {
                 clearTimeout(_handleCTime);
                 _handleCTime = setTimeout(function(){
                     var html = Actions.content.getHtml();
+                      console.debug('CONTENT_CHANGE html', html)
                     postAction({type: 'CONTENT_CHANGE', data: html});
                 }, 50);
             }
