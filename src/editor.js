@@ -313,6 +313,9 @@ function createHTML(options = {}) {
             return didChange;
         }
 
+        function applyMarkdownSyntax(syntax) {
+            return '<span class="markdown-tag">' + syntax + '</span>'
+        }
         function styleAndPreserveMarkdown() {
             const div = editor.content;
             const selection = window.getSelection();
@@ -341,21 +344,21 @@ function createHTML(options = {}) {
                 /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g,
                 function(match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent) {
                     if (boldItalic) {
-                        return '<span class="markdown-tag">' + boldItalic + '</span>' +
+                        return applyMarkdownSyntax(boldItalic) +
                                 '<b><i>' + biContent + '</i></b>' +
-                                '<span class="markdown-tag">' + boldItalic + '</span>';
+                                applyMarkdownSyntax(boldItalic);
                     } else if (bold) {
-                        return '<span class="markdown-tag">' + bold + '</span>' +
+                        return applyMarkdownSyntax(bold) +
                                 '<b>' + bContent + '</b>' +
-                                '<span class="markdown-tag">' + bold + '</span>';
+                                applyMarkdownSyntax(bold);
                     } else if (italic) {
-                        return '<span class="markdown-tag">' + italic + '</span>' +
+                        return applyMarkdownSyntax(italic) +
                                 '<i>' + iContent + '<i>' +
-                                '<span class="markdown-tag">' + italic + '</span>';
+                                applyMarkdownSyntax(italic);
                     } else if (strike) {
-                        return '<span class="markdown-tag">' + strike + '</span>' +
+                        return applyMarkdownSyntax(strike) +
                                 '<span style="text-decoration: line-through;">' + sContent + '</span>' +
-                                '<span class="markdown-tag">' + strike + '</span>';
+                                applyMarkdownSyntax(strike);
                     }
                     return match;
                 }
