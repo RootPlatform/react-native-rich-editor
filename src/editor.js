@@ -327,22 +327,17 @@ function createHTML(options = {}) {
                 cursorOffset = preRange.toString().length;
             }
 
-            const editorHTML = div.innerHTML;
+            let editorHTML = div.innerHTML;
             console.debug("starting html", editorHTML);
 
-            // Create a temporary div to operate on
-            const tempRoot = document.createElement("div");
-            tempRoot.innerHTML = editorHTML;
-
             // Flatten all elements leaving only allowed <div>, <br>, and text nodes
-            stripHTMLAndFlatten(tempRoot);
+            stripHTMLAndFlatten(editorHTML);
 
             // Convert it to a string for the markdown parsing.
-            const flattenedHTML = tempRoot.innerHTML;
-            console.debug("flattened HTML:", flattenedHTML)
+            console.debug("flattened HTML:", editorHTML)
 
             // Apply styling and preserve markdown
-            const parsedHTML = flattenedHTML.replace(
+            editorHTML = editorHTML.replace(
                 /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g,
                 function(match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent) {
                     if (boldItalic) {
@@ -366,8 +361,8 @@ function createHTML(options = {}) {
                 }
             );
 
-            div.innerHTML = parsedHTML;
-            console.debug('parsed HTML', parsedHTML)
+            console.debug('parsed HTML', editorHTML)
+            div.innerHTML = editorHTML;
 
             // Restore cursor position
             const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
