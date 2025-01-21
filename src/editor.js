@@ -342,7 +342,7 @@ function createHTML(options = {}) {
                 function(match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent) {
                     if (boldItalic) {
                         return '<span class="markdown-tag">' + boldItalic + '</span>' +
-                                '<b><i>' + biContent + '</b></i>' +
+                                '<b><i>' + biContent + '</i></b>' +
                                 '<span class="markdown-tag">' + boldItalic + '</span>';
                     } else if (bold) {
                         return '<span class="markdown-tag">' + bold + '</span>' +
