@@ -328,7 +328,7 @@ function createHTML(options = {}) {
         */
         function parseMarkdown() {
             const editorContent = editor.content;
-            
+        
             // Save the active cursor position. We'll restore it after parsing.
             // Note - the rangeCount of an idle cursor is 1. A rangeCount of 0 means no cursor is active in the editor.
             const selection = window.getSelection();        
@@ -336,13 +336,13 @@ function createHTML(options = {}) {
             let cursorOffset = 0;
             if (range) {
                 const preRange = document.createRange();
-                preRange.setStart(div, 0);
+                preRange.setStart(editorContent, 0);
                 preRange.setEnd(range.startContainer, range.startOffset);
                 cursorOffset = preRange.toString().length;
             }
-
+                
             // Get editor html. User input is escaped at this point.
-            const editorHTML = div.innerHTML;
+            const editorHTML = editorContent.innerHTML;
             console.debug("starting html", editorHTML);
 
             // Create a temporary div to operate on
@@ -381,11 +381,11 @@ function createHTML(options = {}) {
             console.debug('parsed HTML', parsedHTML)
 
             // Replace editor content with parsed HTML
-            div.innerHTML = parsedHTML;
+            editorContent.innerHTML = parsedHTML;
 
             // Restore cursor position.
             // We do so using our existing cursor offset.
-            const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
+            const walker = document.createTreeWalker(editorContent, NodeFilter.SHOW_TEXT, null, false);
             let currentOffset = 0;
             let found = false;
             let node;
@@ -413,7 +413,7 @@ function createHTML(options = {}) {
             // collapse the selection at the end of the content and place cursor at the end.
             if (range) {
                 if (!found) {
-                    range.selectNodeContents(div);
+                    range.selectNodeContents(editorContent);
                     range.collapse(false);
                 }
             }
