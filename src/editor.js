@@ -276,7 +276,7 @@ function createHTML(options = {}) {
         }
 
         /*
-        * Strip and flatten markup to start with a clean slate for markdown parsing
+        * Strip and flatten markup to start with clean text for markdown parsing
         */
         function stripHTMLAndFlatten(element) {
             let changed = true;
@@ -341,7 +341,7 @@ function createHTML(options = {}) {
                 cursorOffset = preRange.toString().length;
             }
 
-            // Get editor html
+            // Get editor html. User input is escaped at this point.
             const editorHTML = div.innerHTML;
             console.debug("starting html", editorHTML);
 
