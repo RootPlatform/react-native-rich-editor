@@ -62,8 +62,8 @@ function createHTML(options = {}) {
         .pell { height: 100%;} .pell-content { outline: 0; overflow-y: auto;padding: 10px;height: 100%;${contentCSSText}}
     </style>
     <style>
-        [placeholder]:empty:before { content: attr(placeholder); color: ${placeholderColor};}
-        [placeholder]:empty:focus:before { content: attr(placeholder);color: ${placeholderColor};display:block;}
+        [placeholder]:empty:before { content: attr(placeholder); color: ${placeholderColor}; font-size: 16px;}
+        [placeholder]:empty:focus:before { content: attr(placeholder);color: ${placeholderColor};display:block; font-size: 16px;}
     </style>
     ${getContentCSS()}
     <style>${cssText}</style>
