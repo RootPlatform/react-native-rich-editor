@@ -367,7 +367,7 @@ function createHTML(options = {}) {
                                 applyMarkdownSyntax(bold);
                     } else if (italic) {
                         return applyMarkdownSyntax(italic) +
-                                '<i>' + iContent + '<i>' +
+                                '<i>' + iContent + '</i>' +
                                 applyMarkdownSyntax(italic);
                     } else if (strike) {
                         return applyMarkdownSyntax(strike) +
