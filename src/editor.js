@@ -317,7 +317,7 @@ function createHTML(options = {}) {
             return '<span class="markdown-tag">' + syntax + '</span>'
         }
         function styleAndPreserveMarkdown() {
-            const div = editor.content;
+            const editorContent = editor.content;
             const selection = window.getSelection();
             const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
 
@@ -330,17 +330,20 @@ function createHTML(options = {}) {
                 cursorOffset = preRange.toString().length;
             }
 
-            let editorHTML = div.innerHTML;
+            // Get editor html
+            const editorHTML = div.innerHTML;
             console.debug("starting html", editorHTML);
 
-            // Flatten all elements leaving only allowed <div>, <br>, and text nodes
-            stripHTMLAndFlatten(editorHTML);
+            // Create a temporary div to operate on
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = editorHTML;
 
-            // Convert it to a string for the markdown parsing.
-            console.debug("flattened HTML:", editorHTML)
+            // Flatten all elements leaving only allowed <div>, <br>, and text nodes
+            stripHTMLAndFlatten(tempDiv);
+            console.debug("flattened HTML:", tempDiv.innerHTML);
 
             // Apply styling and preserve markdown
-            editorHTML = editorHTML.replace(
+            const parsedHTML = tempDiv.innerHTML.replace(
                 /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g,
                 function(match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent) {
                     if (boldItalic) {
@@ -364,8 +367,9 @@ function createHTML(options = {}) {
                 }
             );
 
-            console.debug('parsed HTML', editorHTML)
-            div.innerHTML = editorHTML;
+            console.debug('parsed HTML', parsedHTML)
+            // Replace editor content with parsed HTML
+            div.innerHTML = parsedHTML;
 
             // Restore cursor position
             const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
@@ -672,7 +676,7 @@ function createHTML(options = {}) {
                     } else {
                         paragraphStatus = 1;
                     }
-                } else if (content.innerHTML === '<br>'){
+                } else if (content.innerHTML === '<br>' || content.innerHTML === '<div><br></div><br>'){
                     content.innerHTML = '';
                 } else if (enterStatus && queryCommandValue(formatBlock) === 'blockquote') {
                     formatParagraph();
@@ -681,7 +685,7 @@ function createHTML(options = {}) {
                 saveSelection();
                 handleChange(_ref);
                 settings.onChange();
-                styleAndPreserveMarkdown()
+               if (content.innerHTML) styleAndPreserveMarkdown()
                 ${inputListener} && postAction({type: "ON_INPUT", data: {inputType: _ref.inputType, data: _ref.data}});
             };
             appendChild(settings.element, content);
