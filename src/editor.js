@@ -275,7 +275,9 @@ function createHTML(options = {}) {
             }
         }
 
-        // Strip and flatten markup to start with a clean slate for markdown parsing
+        /*
+        * Strip and flatten markup to start with a clean slate for markdown parsing
+        */
         function stripHTMLAndFlatten(element) {
             let changed = true;
             // Flatten until no changes are made
@@ -284,8 +286,12 @@ function createHTML(options = {}) {
             }
         }
 
-        // Single pass that flattens current markup.
-        // Returns true if it flattened something, meaning we might need another pass.
+        /* 
+        * Single pass that flattens current markup.
+        * Returns true if it flattened something, meaning we might need another pass.
+        * Preserve div and br elements.
+        * I've found this is the best way to preserve line break context. It's best to rely on built in contenteditable behavior for managing new lines.
+        */
         function flattenOnePass(element) {
             let child = element.firstChild;
             let didChange = false;
@@ -316,12 +322,17 @@ function createHTML(options = {}) {
         function applyMarkdownSyntax(syntax) {
             return '<span class="markdown-tag">' + syntax + '</span>'
         }
-        function styleAndPreserveMarkdown() {
-            const editorContent = editor.content;
-            const selection = window.getSelection();
-            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
 
-            // Save cursor position
+        /*
+        * Parse the editor content and apply markdown syntax
+        */
+        function parseMarkdown() {
+            const editorContent = editor.content;
+            
+            // Save the active cursor position. We'll restore it after parsing.
+            // Note - the rangeCount of an idle cursor is 1. A rangeCount of 0 means no cursor is active in the editor.
+            const selection = window.getSelection();        
+            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
             let cursorOffset = 0;
             if (range) {
                 const preRange = document.createRange();
@@ -342,7 +353,7 @@ function createHTML(options = {}) {
             stripHTMLAndFlatten(tempDiv);
             console.debug("flattened HTML:", tempDiv.innerHTML);
 
-            // Apply styling and preserve markdown
+            // Apply markdown styling
             const parsedHTML = tempDiv.innerHTML.replace(
                 /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g,
                 function(match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent) {
@@ -368,10 +379,12 @@ function createHTML(options = {}) {
             );
 
             console.debug('parsed HTML', parsedHTML)
+
             // Replace editor content with parsed HTML
             div.innerHTML = parsedHTML;
 
-            // Restore cursor position
+            // Restore cursor position.
+            // We do so using our existing cursor offset.
             const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
             let currentOffset = 0;
             let found = false;
@@ -379,30 +392,37 @@ function createHTML(options = {}) {
 
             while ((node = walker.nextNode())) {
                 const nextOffset = currentOffset + node.length;
-                // Stop if our cursorOffset is strictly less
-                // than the nextOffset (meaning it's "inside" this text node).
+                // Stop if our cursorOffset is less than the nextOffset, meaning the cursor should be in this text node.
                 if (cursorOffset < nextOffset) {
-                    const offsetInNode = cursorOffset - currentOffset;
+                    // Place the cursor in the text node at the correct offset, the difference between the cursorOffset and currentOffset. 
+                    const offsetInNode = cursorOffset - currentOffset
+                    
+                    // If we had a range, set the start and end of the range to the new text node and offset.
                     if (range) {
-                    range.setStart(node, offsetInNode);
-                    range.setEnd(node, offsetInNode);
+                        range.setStart(node, offsetInNode);
+                        range.setEnd(node, offsetInNode);
                     }
                     found = true;
                     break;
                 }
-            currentOffset = nextOffset;
+                currentOffset = nextOffset;
             }
+
 
             // If we never found a text node to place the cursor in,
             // collapse the selection at the end of the content and place cursor at the end.
-            selection.removeAllRanges();
-                if (range) {
+            if (range) {
                 if (!found) {
                     range.selectNodeContents(div);
-                    range.collapse(false).
+                    range.collapse(false);
                 }
-                selection.addRange(range);
             }
+                
+            // remove active selection ranges
+            selection.removeAllRanges();
+
+            // add the new range to selection
+            selection.addRange(range);
         }
   
         var Actions = {
@@ -685,7 +705,7 @@ function createHTML(options = {}) {
                 saveSelection();
                 handleChange(_ref);
                 settings.onChange();
-               if (content.innerHTML) styleAndPreserveMarkdown()
+               if (content.innerHTML) parseMarkdown()
                 ${inputListener} && postAction({type: "ON_INPUT", data: {inputType: _ref.inputType, data: _ref.data}});
             };
             appendChild(settings.element, content);
