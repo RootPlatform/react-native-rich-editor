@@ -602,82 +602,81 @@ function createHTML(options = {}) {
             }
                 
             const selection = window.getSelection();
+            const selectedText = selection.toString();
             // if no cursor in the document, return
             if (!selection.rangeCount) return;
 
             let range = selection.getRangeAt(0);
             let anchorNode = range.startContainer;
-            console.log('anchorNode', anchorNode, anchorNode.nodeName, anchorNode===editorContent);
-
-            // Edge cases for cursor placement
-            // if anchor node happens to be the editor, we're outside of the bounds of the rest of the content which can lead to unexpected behavior
-            if (anchorNode === editorContent) {
-                // place the range in the last child of the editor
-                console.log('anchorNode.lastChild', anchorNode.lastChild, anchorNode.lastChild?.nodeName);
-                if (anchorNode.lastChild && anchorNode.lastChild.nodeName === 'DIV') {
-                    let newPlacement = anchorNode.lastChild;
-                    console.log('anchorNode.lastChild.lastChild', anchorNode.lastChild.lastChild, anchorNode.lastChild.lastChild.nodeName);
-                    if (newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
-                    console.log('found text node');
-                        newPlacement = newPlacement.lastChild;
-                    }                    
-                    const newRange = document.createRange();
-                    newRange.selectNodeContents(newPlacement);
-                    newRange.collapse(false);
-                    selection.removeAllRanges();
-                    selection.addRange(newRange);            
-                }
-            }
-
-            // if the anchor node parent happens to be a span, we're in the middle of a markdown tag, let's get back to the parent div if we're adjacent to the tag
-            if (anchorNode.parentNode.nodeName === 'SPAN' && anchorNode.parentNode.className === 'markdown-tag') {
-                console.log('anchorNode.parentNode', anchorNode.parentNode, anchorNode.parentNode.nodeName);
-                console.log('anchorNode parent sibling', anchorNode.parentNode.previousSibling?.nodeName, anchorNode.parentNode.nextSibling?.nodeName);
-                let newPlacement = anchorNode.parentNode;
-                // if the previous sibling is a styled text node and the cursor is at the start, we want to place the cursor at the end of the text node
-                if (anchorNode.parentNode.previousSibling && ALLOWED_NODE_NAME_REGEX.test(anchorNode.parentNode.previousSibling.nodeName) && range.startOffset === 0) {
-                    console.log('found previous sibling');
-                    // place the range in the previous sibling
-                     let newPlacement = anchorNode.parentNode.previousSibling;
-                    console.log('newPlacement.lastChild', newPlacement.lastChild, newPlacement.lastChild.nodeName);
-                    if (newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
-                        console.log('found text node');
-                        newPlacement = newPlacement.lastChild;
-                    }
-                    const newRange = document.createRange();
-                    newRange.selectNodeContents(newPlacement);
-                    newRange.collapse(false);
-                    selection.removeAllRanges();
-                    selection.addRange(newRange);
-                } else if (anchorNode.parentNode.nextSibling && ALLOWED_NODE_NAME_REGEX.test(anchorNode.parentNode.nextSibling.nodeName) && range.startOffset === anchorNode.parentNode.textContent.length) { 
-                    console.log('found next sibling');
-                    // place the range in the previous sibling
-                     let newPlacement = anchorNode.parentNode.nextSibling;
-                    console.log('newPlacement.firstChild', newPlacement.firstChild, newPlacement.firstChild.nodeName);
-                    if (newPlacement.firstChild.nodeType === Node.TEXT_NODE) {
-                        console.log('found text node');
-                         newPlacement = newPlacement.firstChild;
-
-                    }       
-                    const newRange = document.createRange();
-                    newRange.setStart(newPlacement, 0);
-                    newRange.setEnd(newPlacement, 0);
-                    selection.removeAllRanges();
-                    selection.addRange(newRange);
-            
-                }
-            } 
-
-            // Get the text before and after the selection for detecting if the markdown syntax is already present
             let before = "";
             let after = "";
-            if (selection.rangeCount > 0) {
-                console.log('no selection, getting surrounding text');
+            console.log('anchorNode', anchorNode, anchorNode.nodeName, anchorNode===editorContent);
+
+            if (selection.isCollapsed) {
+                // Edge cases for cursor placement
+                // if anchor node happens to be the editor, we're outside of the bounds of the rest of the content which can lead to unexpected behavior
+                if (anchorNode === editorContent) {
+                    // place the range in the last child of the editor
+                    console.log('anchorNode.lastChild', anchorNode.lastChild, anchorNode.lastChild?.nodeName);
+                    if (anchorNode.lastChild && anchorNode.lastChild.nodeName === 'DIV') {
+                        let newPlacement = anchorNode.lastChild;
+                        console.log('anchorNode.lastChild.lastChild', anchorNode.lastChild.lastChild, anchorNode.lastChild.lastChild.nodeName);
+                        if (newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
+                        console.log('found text node');
+                            newPlacement = newPlacement.lastChild;
+                        }                    
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(newPlacement);
+                        newRange.collapse(false);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);            
+                    }
+                }
+
+                // if the anchor node parent happens to be a span, we're in the middle of a markdown tag, let's get back to the parent div if we're adjacent to the tag
+                if (anchorNode.parentNode.nodeName === 'SPAN' && anchorNode.parentNode.className === 'markdown-tag') {
+                    console.log('anchorNode.parentNode', anchorNode.parentNode, anchorNode.parentNode.nodeName);
+                    console.log('anchorNode parent sibling', anchorNode.parentNode.previousSibling?.nodeName, anchorNode.parentNode.nextSibling?.nodeName);
+                    let newPlacement = anchorNode.parentNode;
+                    // if the previous sibling is a styled text node and the cursor is at the start, we want to place the cursor at the end of the text node
+                    if (anchorNode.parentNode.previousSibling && ALLOWED_NODE_NAME_REGEX.test(anchorNode.parentNode.previousSibling.nodeName) && range.startOffset === 0) {
+                        console.log('found previous sibling');
+                        // place the range in the previous sibling
+                        let newPlacement = anchorNode.parentNode.previousSibling;
+                        console.log('newPlacement.lastChild', newPlacement.lastChild, newPlacement.lastChild.nodeName);
+                        if (newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
+                            console.log('found text node');
+                            newPlacement = newPlacement.lastChild;
+                        }
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(newPlacement);
+                        newRange.collapse(false);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                    } else if (anchorNode.parentNode.nextSibling && ALLOWED_NODE_NAME_REGEX.test(anchorNode.parentNode.nextSibling.nodeName) && range.startOffset === anchorNode.parentNode.textContent.length) { 
+                        console.log('found next sibling');
+                        // place the range in the previous sibling
+                        let newPlacement = anchorNode.parentNode.nextSibling;
+                        console.log('newPlacement.firstChild', newPlacement.firstChild, newPlacement.firstChild.nodeName);
+                        if (newPlacement.firstChild.nodeType === Node.TEXT_NODE) {
+                            console.log('found text node');
+                            newPlacement = newPlacement.firstChild;
+
+                        }       
+                        const newRange = document.createRange();
+                        newRange.setStart(newPlacement, 0);
+                        newRange.setEnd(newPlacement, 0);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                
+                    }
+                } 
+                // With a collapsed range, detect the text before and after the selection to see if the markdown syntax is already present
                 const surroundingText = getSurroundingTextFromSelection();
                 before = surroundingText.before;
                 after = surroundingText.after;
             }
-                
+
             // console.log('before', before, before.length, 'after', after, after.length, 'selectedText', selectedText);
 
             // insert selection tokens to track the selection position through parsing.
@@ -1190,6 +1189,13 @@ function createHTML(options = {}) {
                     }
                 }
             };
+            document.addEventListener('selectionchange', () => {
+                console.log('selectionchange');
+                // debounce this function to prevent multiple calls
+                // if range parent is bold or italic we want to show the button as active
+                // we could broadcast it to the component via content change, or write our own handler
+                // let's hijack the selection change listener
+            });
             document.addEventListener("message", message , false);
             window.addEventListener("message", message , false);
             document.addEventListener('mouseup', function (event) {
