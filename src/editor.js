@@ -386,16 +386,20 @@ function createHTML(options = {}) {
                 preRange.setEnd(range.startContainer, range.startOffset);
                 cursorOffset = preRange.toString().length;
             }
-                
+            
+            // Create a temporary div
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = editorContent.innerHTML;
+            
             // Get editor html. User input is escaped at this point.
-            console.log("starting html", editorContent.innerHTML);
+            console.log("starting html", tempDiv.innerHTML);
 
             // Flatten all elements leaving only allowed <div>, <br>, and text nodes
-            stripHTMLAndFlatten(editorContent);
-            console.log("flattened HTML:", editorContent.innerHTML);
+            stripHTMLAndFlatten(tempDiv);
+            console.log("flattened HTML:", tempDiv.innerHTML);
 
             // Apply markdown styling
-            const parsedHTML = addMarkdownElements(editorContent);
+            const parsedHTML = addMarkdownElements(tempDiv);
             console.log('parsed HTML', parsedHTML)
 
             // Replace editor content with parsed HTML
@@ -447,7 +451,7 @@ function createHTML(options = {}) {
          * Inserts MARKER_START and MARKER_END at the selection boundaries in the editor content to track cursor position.
          * Note: Prior to insertion, we remove the active selection ranges, so the user won't potentially see a highlight of these tokens.
          */
-        function insertMarkerTokens(element) {
+        function insertMarkerTokens() {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
 
@@ -600,7 +604,7 @@ function createHTML(options = {}) {
                 console.warn("Unknown markdown markdownType: " + markdownType);
                 return;
             }
-                
+
             const selection = window.getSelection();
             const selectedText = selection.toString();
             // if no cursor in the document, return
@@ -678,19 +682,23 @@ function createHTML(options = {}) {
             }
 
             // console.log('before', before, before.length, 'after', after, after.length, 'selectedText', selectedText);
-
+                
             // insert selection tokens to track the selection position through parsing.
             insertMarkerTokens();
             console.log('markdownSyntax inserted', editorContent.innerHTML);
 
-            // flatten the content for parsing, this helps handle wider selection ranges
-            stripHTMLAndFlatten(editorContent);
+            // Create a temporary div
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = editorContent.innerHTML;
 
-            console.log('content flattened', editorContent.innerHTML);
+            // flatten the content for parsing, this helps handle wider selection ranges
+            stripHTMLAndFlatten(tempDiv);
+
+            console.log('content flattened', tempDiv.innerHTML);
 
             // Find the markers in the content, the index is the start of the marker token in the string
-            const markerStartIndex = editorContent.innerHTML.indexOf(MARKER_START);
-            const markerEndIndex = editorContent.innerHTML.indexOf(MARKER_END);
+            const markerStartIndex = tempDiv.innerHTML.indexOf(MARKER_START);
+            const markerEndIndex = tempDiv.innerHTML.indexOf(MARKER_END);
             console.log('markerStartIndex', markerStartIndex, markerEndIndex);
 
             const previousSyntaxStart = markerStartIndex - markdownSyntax.length - before.length;
@@ -699,28 +707,30 @@ function createHTML(options = {}) {
             const nextSyntaxEnd = nextSyntaxStart + markdownSyntax.length            
 
             // Determine if the text before and after the selection is the markdown syntax
-            const isPreviousTextASyntaxMatch = editorContent.innerHTML.slice(previousSyntaxStart, markerStartIndex - before.length) === markdownSyntax;
-            const isNextTextASyntaxMatch = editorContent.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd) === markdownSyntax;
+            const isPreviousTextASyntaxMatch = tempDiv.innerHTML.slice(previousSyntaxStart, markerStartIndex - before.length) === markdownSyntax;
+            const isNextTextASyntaxMatch = tempDiv.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd) === markdownSyntax;
 
             let updatedText; 
-            console.log('editorContent.innerHTML', editorContent.innerHTML, editorContent.innerHTML.slice(previousSyntaxStart, markerStartIndex - before.length),  editorContent.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd));
+            console.log('tempDiv.innerHTML', tempDiv.innerHTML, tempDiv.innerHTML.slice(previousSyntaxStart, markerStartIndex - before.length),  tempDiv.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd));
             if (isPreviousTextASyntaxMatch && isNextTextASyntaxMatch) {
                 // Remove the syntax
-                console.log('removing syntax', editorContent.innerHTML.slice(0, previousSyntaxStart - before.length), editorContent.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length), editorContent.innerHTML.slice(nextSyntaxEnd));
-                updatedText = editorContent.innerHTML.slice(0, previousSyntaxStart) + editorContent.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length) + editorContent.innerHTML.slice(nextSyntaxEnd);
+                console.log('removing syntax', tempDiv.innerHTML.slice(0, previousSyntaxStart - before.length), tempDiv.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length), tempDiv.innerHTML.slice(nextSyntaxEnd));
+                updatedText = tempDiv.innerHTML.slice(0, previousSyntaxStart) + tempDiv.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length) + tempDiv.innerHTML.slice(nextSyntaxEnd);
             } else {
                 // Add the syntax
-                console.log('adding syntax', editorContent.innerHTML.slice(0, markerStartIndex - before.length), markdownSyntax, editorContent.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length),  markdownSyntax + editorContent.innerHTML.slice(nextSyntaxStart));
-                updatedText = editorContent.innerHTML.slice(0, markerStartIndex - before.length) + markdownSyntax + editorContent.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length) + markdownSyntax + editorContent.innerHTML.slice(nextSyntaxStart);
+                console.log('adding syntax', tempDiv.innerHTML.slice(0, markerStartIndex - before.length), markdownSyntax, tempDiv.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length),  markdownSyntax + tempDiv.innerHTML.slice(nextSyntaxStart));
+                updatedText = tempDiv.innerHTML.slice(0, markerStartIndex - before.length) + markdownSyntax + tempDiv.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length) + markdownSyntax + tempDiv.innerHTML.slice(nextSyntaxStart);
             }
             console.log('updatedText', updatedText);
             // Update the editor content
-            editorContent.innerHTML = updatedText;
+            tempDiv.innerHTML = updatedText;
 
             // Parse string to add back markdown syntax
-            console.log('parseMarkdown start', editorContent.innerHTML, range.startContainer.textContent);
-            const parsed = addMarkdownElements(editorContent);
+            console.log('parseMarkdown start', tempDiv.innerHTML, range.startContainer.textContent);
+            const parsed = addMarkdownElements(tempDiv);
             console.log('parseMarkdown done', parsed);
+
+            // Update the editor content
             editorContent.innerHTML = parsed;
         
 
@@ -754,6 +764,19 @@ function createHTML(options = {}) {
             Actions.UPDATE_HEIGHT();
             Actions.UPDATE_OFFSET_Y();
         }
+        
+        function determineSelectionDecorator(range, nodeName) {
+            let parent = range.commonAncestorContainer;
+            if (parent.nodeType === Node.TEXT_NODE) {
+                parent = parent.parentNode;
+            }
+            // if the parent is a italic node, and we're looking for bold, look one more level up as we wrap <b> in <i> for bold italic
+            if (parent.nodeName === 'I' && nodeName === 'B') {
+                parent = parent.parentNode;
+            }
+            return parent.nodeName === nodeName;
+        };
+    
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
@@ -1191,10 +1214,21 @@ function createHTML(options = {}) {
             };
             document.addEventListener('selectionchange', () => {
                 console.log('selectionchange');
-                // debounce this function to prevent multiple calls
-                // if range parent is bold or italic we want to show the button as active
-                // we could broadcast it to the component via content change, or write our own handler
-                // let's hijack the selection change listener
+                // basic cursor data - determine if current range is in a bold or italic block
+                // this can be expanded on to include detection for mention and emoji actions
+                const range = window.getSelection().getRangeAt(0);
+                if (!range) return;
+                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false } };
+                const isBold = determineSelectionDecorator(range, 'B');
+                if (isBold) {
+                   cursorData.decorators.bold = true;
+                }       
+                const isItalic = determineSelectionDecorator(range, 'I');
+                if (isItalic) {
+                   cursorData.decorators.italic = true;
+                }
+  
+                postAction({type: 'SELECTION_CHANGE', data: cursorData});
             });
             document.addEventListener("message", message , false);
             window.addEventListener("message", message , false);
