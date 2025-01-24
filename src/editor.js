@@ -443,10 +443,8 @@ function createHTML(options = {}) {
         }
 
         /**
-         * Inserts MARKER_START and MARKER_END at the selection boundaries in the DOM.
-         * If the selection is non-collapsed, the START marker goes at the "start" boundary, and the END marker goes at the "end" boundary.
-         * If the selection is collapsed (just a caret), both markers get inserted at the same spot
-         * Note: After this insertion, we remove the active selection ranges, so the user won't potentially see a highlight of these tokens.
+         * Inserts MARKER_START and MARKER_END at the selection boundaries in the editor content to track cursor position.
+         * Note: Prior to insertion, we remove the active selection ranges, so the user won't potentially see a highlight of these tokens.
          */
         function insertMarkerTokens(element) {
             const selection = window.getSelection();
@@ -455,9 +453,11 @@ function createHTML(options = {}) {
             const range = selection.getRangeAt(0);
             selection.removeAllRanges();
 
+            // If the range is collapsed, insert both markers at the cursor position.
             if (range.collapsed) {
                 range.insertNode(document.createTextNode(MARKER_END));
                 range.insertNode(document.createTextNode(MARKER_START));
+            // If the range is not collapsed, insert markers at the start and end boundaries.
             } else {
                 // Clone the original range so we can manipulate each boundary independently.
                 const startRange = range.cloneRange();
