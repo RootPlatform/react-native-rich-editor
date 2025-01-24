@@ -342,9 +342,10 @@ function createHTML(options = {}) {
         /**
         * String parsing function to add markdown elements to the editor content
         */ 
+        const MARKDOWN_SYNTAX_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g;
         function addMarkdownElements(element) {
             return element.innerHTML.replace(
-                /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g,
+                MARKDOWN_SYNTAX_REGEX,
                 function(match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent) {
                     if (boldItalic && biContent && !isMatchOnSelectionMarkers(biContent)) {
                         return applyMarkdownSyntax(boldItalic) +
@@ -522,7 +523,7 @@ function createHTML(options = {}) {
             // If we found only one or neither, return null
             return null;
         }
-
+        
         function getSurroundingTextFromSelection() {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) {
@@ -668,8 +669,16 @@ function createHTML(options = {}) {
             } 
 
             // Get the text before and after the selection for detecting if the markdown syntax is already present
-            const { before, selectedText, after } = getSurroundingTextFromSelection();
-            console.log('before', before, before.length, 'after', after, after.length, 'selectedText', selectedText);
+            let before = "";
+            let after = "";
+            if (selection.rangeCount > 0) {
+                console.log('no selection, getting surrounding text');
+                const surroundingText = getSurroundingTextFromSelection();
+                before = surroundingText.before;
+                after = surroundingText.after;
+            }
+                
+            // console.log('before', before, before.length, 'after', after, after.length, 'selectedText', selectedText);
 
             // insert selection tokens to track the selection position through parsing.
             insertMarkerTokens();
@@ -710,7 +719,7 @@ function createHTML(options = {}) {
             editorContent.innerHTML = updatedText;
 
             // Parse string to add back markdown syntax
-            console.log('parseMarkdown start', editorContent.innerHTML, selectedText, range.startContainer.textContent);
+            console.log('parseMarkdown start', editorContent.innerHTML, range.startContainer.textContent);
             const parsed = addMarkdownElements(editorContent);
             console.log('parseMarkdown done', parsed);
             editorContent.innerHTML = parsed;
