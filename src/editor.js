@@ -519,6 +519,57 @@ function createHTML(options = {}) {
             return null;
         }
 
+        function getSurroundingTextFromSelection() {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) {
+                return { before: "", selectedText: "", after: "" };
+            }
+
+            const range = selection.getRangeAt(0);
+            console.log('range', range, range.startContainer, range.startContainer, range.startOffset, range.endOffset);
+            if (range.startContainer.nodeType !== Node.TEXT_NODE) {
+               return { before: "", selectedText: "", after: "" };
+            }
+
+            const textNode = range.startContainer;
+            const text = textNode.textContent;
+
+            console.log('text', text);
+            const startOffset = range.startOffset;
+            const endOffset = range.endOffset; // Handles the active selection length
+            const selectedText = selection.toString(); // Directly get the selected string
+
+            let before = "";
+            let after = "";
+
+            // Helper function to check if a character should stop the traversal
+            function isStopCharacter(char) {
+                console.log('char', char, typeof char, char.length);
+                return !char.trim() || char === "\\s+" || char === "*" || char === "\`" || char === "~";
+            }
+
+            // Look backward from the start of the selection
+            for (let i = startOffset - 1; i >= 0; i--) {
+                if (isStopCharacter(text[i])) {
+                    break;
+                }
+                before += text[i]
+            }
+            console.log('before', before);
+            // Look forward from the end of the selection
+            for (let i = endOffset; i < text.length; i++) {
+                console.log('text[i]', text[i]);
+                if (isStopCharacter(text[i])) {
+                    break;
+                }
+                console.log('after', after);
+                after += text[i];
+            }
+            // console.log('after', after);
+
+            return { before, selectedText, after };
+        }
+
         // Define the markers for different Markdown styles.
         const MARKDOWN_SYNTAX = {
             italic: '*',
@@ -529,8 +580,7 @@ function createHTML(options = {}) {
 
         /**
          * Toggle markdown function for bold, italic, etc.
-         * If no text is selected, insert markdown syntax and place cursor in the middle.
-         * Else ,if text is selected ,insert marker start and end around selection, then
+         * Inserts marker start and end around selection, then
          * Flatten the content
          * Determine whether to insert or remove markdown syntax
          * Run function to add back markdown elements
@@ -549,11 +599,36 @@ function createHTML(options = {}) {
             // if no cursor in the document, return
             if (!selection.rangeCount) return;
 
-            const range = selection.getRangeAt(0);
-            const selectedText = selection.toString();
-            const anchorNode = range.startContainer;
+            let range = selection.getRangeAt(0);
+            let anchorNode = range.startContainer;
+            console.log('anchorNode', anchorNode, anchorNode.nodeName, anchorNode===editorContent);
+            // if anchor node happens to be the editor, we're outside of the bounds of the rest of the content which can lead to unexpected behavior
+            if (anchorNode === editorContent) {
+                // place the range in the last child of the editor
+                console.log('anchorNode.lastChild', anchorNode.lastChild, anchorNode.lastChild?.nodeName);
+                if (anchorNode.lastChild && anchorNode.lastChild.nodeName === 'DIV') {
+                    console.log('anchorNode.lastChild.lastChild', anchorNode.lastChild.lastChild, anchorNode.lastChild.lastChild.nodeName);
+                    if (anchorNode.lastChild.lastChild.nodeType === Node.TEXT_NODE) {
+                    console.log('found text node');
+                    const textChild = anchorNode.lastChild.lastChild;
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(textChild);
+                        newRange.collapse(false);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                    } else {
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(anchorNode.lastChild);
+                        newRange.collapse(false);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                     }
+        
+                }
+            }
 
-            console.log('selectedText', selectedText, range.collapsed);
+            const { before, selectedText, after } = getSurroundingTextFromSelection();
+            console.log('before', before, before.length, 'after', after, after.length, 'selectedText', selectedText);
 
             // insert selection tokens to track the selection position through parsing.
             insertMarkerTokens();
@@ -569,25 +644,25 @@ function createHTML(options = {}) {
             const markerEndIndex = editorContent.innerHTML.indexOf(MARKER_END);
             console.log('markerStartIndex', markerStartIndex, markerEndIndex);
 
-            const previousSyntaxStart = markerStartIndex - markdownSyntax.length
+            const previousSyntaxStart = markerStartIndex - markdownSyntax.length - before.length;
 
-            const nextSyntaxStart = markerEndIndex + MARKER_END.length
-            const nextSyntaxEnd = nextSyntaxStart + markdownSyntax.length
-
-            
+            const nextSyntaxStart = markerEndIndex + MARKER_END.length + after.length;
+            const nextSyntaxEnd = nextSyntaxStart + markdownSyntax.length            
 
             // Determine if the text before and after the selection is the markdown syntax
-            const isPreviousTextASyntaxMatch = editorContent.innerHTML.slice(previousSyntaxStart, markerStartIndex) === markdownSyntax;
+            const isPreviousTextASyntaxMatch = editorContent.innerHTML.slice(previousSyntaxStart, markerStartIndex - before.length) === markdownSyntax;
             const isNextTextASyntaxMatch = editorContent.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd) === markdownSyntax;
 
             let updatedText; 
-            console.log('editorContent.innerHTML', editorContent.innerHTML, editorContent.innerHTML.slice(previousSyntaxStart, markerStartIndex),  editorContent.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd));
+            console.log('editorContent.innerHTML', editorContent.innerHTML, editorContent.innerHTML.slice(previousSyntaxStart, markerStartIndex - before.length),  editorContent.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd));
             if (isPreviousTextASyntaxMatch && isNextTextASyntaxMatch) {
                 // Remove the syntax
-                updatedText = editorContent.innerHTML.slice(0, previousSyntaxStart) + editorContent.innerHTML.slice(markerStartIndex, markerEndIndex + MARKER_END.length) + editorContent.innerHTML.slice(nextSyntaxEnd);
+                console.log('removing syntax', editorContent.innerHTML.slice(0, previousSyntaxStart - before.length), editorContent.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length), editorContent.innerHTML.slice(nextSyntaxEnd));
+                updatedText = editorContent.innerHTML.slice(0, previousSyntaxStart) + editorContent.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length) + editorContent.innerHTML.slice(nextSyntaxEnd);
             } else {
                 // Add the syntax
-                updatedText = editorContent.innerHTML.slice(0, markerStartIndex) + markdownSyntax + editorContent.innerHTML.slice(markerStartIndex, markerEndIndex + MARKER_END.length) + markdownSyntax + editorContent.innerHTML.slice(nextSyntaxStart);
+                console.log('adding syntax', editorContent.innerHTML.slice(0, markerStartIndex - before.length), markdownSyntax, editorContent.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length),  markdownSyntax + editorContent.innerHTML.slice(nextSyntaxStart));
+                updatedText = editorContent.innerHTML.slice(0, markerStartIndex - before.length) + markdownSyntax + editorContent.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length) + markdownSyntax + editorContent.innerHTML.slice(nextSyntaxStart);
             }
             console.log('updatedText', updatedText);
             // Update the editor content
