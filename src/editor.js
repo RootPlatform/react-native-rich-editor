@@ -275,6 +275,13 @@ function createHTML(options = {}) {
             }
         }
 
+        /**
+         * Unique markers for selection boundaries. 
+         * These string based boundaries are useful for persisting heavy dom manipulations and string based updates, such as our flattening and parsing functions.
+         */
+        const MARKER_START = "@@----SELECTION-START----@@";
+        const MARKER_END = "@@----SELECTION-END----@@";
+
         /*
         * Strip and flatten markup to start with clean text for markdown parsing
         */
@@ -327,26 +334,32 @@ function createHTML(options = {}) {
         }
 
         /**
+         *  Invalidate match solely on selection markers.
+         */
+        function isMatchOnSelectionMarkers(text) {
+            return text === MARKER_START + MARKER_END;
+        }
+        /**
         * String parsing function to add markdown elements to the editor content
         */ 
         function addMarkdownElements(element) {
             return element.innerHTML.replace(
                 /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g,
                 function(match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent) {
-                    if (boldItalic && biContent) {
+                    if (boldItalic && biContent && !isMatchOnSelectionMarkers(biContent)) {
                         return applyMarkdownSyntax(boldItalic) +
                                 '<b><i>' + biContent + '</i></b>' +
                                 applyMarkdownSyntax(boldItalic);
-                    } else if (bold && bContent) {
+                    } else if (bold && bContent && !isMatchOnSelectionMarkers(bContent)) {
                      console.log('bold', bold, bContent);
                         return applyMarkdownSyntax(bold) +
                                 '<b>' + bContent + '</b>' +
                                 applyMarkdownSyntax(bold);
-                    } else if (italic && iContent) {
+                    } else if (italic && iContent && !isMatchOnSelectionMarkers(iContent)) {
                         return applyMarkdownSyntax(italic) +
                                 '<i>' + iContent + '</i>' +
                                 applyMarkdownSyntax(italic);
-                    } else if (strike && sContent) {
+                    } else if (strike && sContent && !isMatchOnSelectionMarkers(sContent)) {
                         return applyMarkdownSyntax(strike) +
                                 '<span style="text-decoration: line-through;">' + sContent + '</span>' +
                                 applyMarkdownSyntax(strike);
@@ -363,7 +376,6 @@ function createHTML(options = {}) {
             const editorContent = editor.content;
         
             // Save the active cursor position. We'll restore it after parsing.
-            // Note: the rangeCount of an idle cursor is 1. A rangeCount of 0 means no cursor is active in the editor.
             const selection = window.getSelection();        
             const range = selection.getRangeAt(0);
             let cursorOffset = 0;
@@ -430,14 +442,6 @@ function createHTML(options = {}) {
             selection.addRange(range);
         }
 
-
-        /**
-         * Unique markers for selection boundaries. 
-         * These string based boundaries are useful for persisting heavy dom manipulations and string based updates, such as our flattening and parsing functions.
-         */
-        const MARKER_START = "@@----SELECTION-START----@@";
-        const MARKER_END = "@@----SELECTION-END----@@";
-
         /**
          * Inserts MARKER_START and MARKER_END at the selection boundaries in the DOM.
          * If the selection is non-collapsed, the START marker goes at the "start" boundary, and the END marker goes at the "end" boundary.
@@ -456,8 +460,8 @@ function createHTML(options = {}) {
                 range.insertNode(document.createTextNode(MARKER_START));
             } else {
                 // Clone the original range so we can manipulate each boundary independently.
-                const startRange = range.cloneRange();  // will use for START
-                const endRange   = range.cloneRange();  // will use for END
+                const startRange = range.cloneRange();
+                const endRange = range.cloneRange();
 
                 // Insert END at the end boundary
                 endRange.collapse(false);
@@ -475,8 +479,10 @@ function createHTML(options = {}) {
          * Otherwise, returns null
          */
         function findMarkerTokens(element) {
-            let startNode = null, startOffset = null;
-            let endNode = null, endOffset = null;
+            let startNode = null;
+            let startOffset = null;
+            let endNode = null; 
+            let endOffset = null;
 
             const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
 
@@ -495,18 +501,16 @@ function createHTML(options = {}) {
                     node.nodeValue = text.slice(0, startIndex) + text.slice(startIndex + MARKER_START.length);
                 }
 
-                // Now look for MARKER_END in the updated text
+                // Look for MARKER_END
                 const newText = node.nodeValue;
                 const endIndex = newText.indexOf(MARKER_END);
                 if (endIndex !== -1) {
-                endNode = node;
-                endOffset = endIndex;
+                    endNode = node;
+                    endOffset = endIndex;
 
-                // remove the MARKER_END token
-                endNode.nodeValue = newText.slice(0, endIndex) + newText.slice(endIndex + MARKER_END.length);
-                
-                // We found both tokens, no need to continue
-                break;
+                    // remove the MARKER_END token
+                    endNode.nodeValue = newText.slice(0, endIndex) + newText.slice(endIndex + MARKER_END.length);
+                    break;
                 }
             }
 
@@ -586,12 +590,13 @@ function createHTML(options = {}) {
          * Run function to add back markdown elements
          * Place cursor back in the right position with the markers
          */
-        function toggleMarkdown(type) {
+        const ALLOWED_NODE_NAME_REGEX = /^(B|I|SPAN)$/;
+        function toggleMarkdown(markdownType) {
             const editorContent = editor.content;
 
-            const markdownSyntax = MARKDOWN_SYNTAX[type];
+            const markdownSyntax = MARKDOWN_SYNTAX[markdownType];
             if (!markdownSyntax) {
-                console.warn("Unknown markdown type: " + type);
+                console.warn("Unknown markdown markdownType: " + markdownType);
                 return;
             }
                 
@@ -602,31 +607,67 @@ function createHTML(options = {}) {
             let range = selection.getRangeAt(0);
             let anchorNode = range.startContainer;
             console.log('anchorNode', anchorNode, anchorNode.nodeName, anchorNode===editorContent);
+
+            // Edge cases for cursor placement
             // if anchor node happens to be the editor, we're outside of the bounds of the rest of the content which can lead to unexpected behavior
             if (anchorNode === editorContent) {
                 // place the range in the last child of the editor
                 console.log('anchorNode.lastChild', anchorNode.lastChild, anchorNode.lastChild?.nodeName);
                 if (anchorNode.lastChild && anchorNode.lastChild.nodeName === 'DIV') {
+                    let newPlacement = anchorNode.lastChild;
                     console.log('anchorNode.lastChild.lastChild', anchorNode.lastChild.lastChild, anchorNode.lastChild.lastChild.nodeName);
-                    if (anchorNode.lastChild.lastChild.nodeType === Node.TEXT_NODE) {
+                    if (newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
                     console.log('found text node');
-                    const textChild = anchorNode.lastChild.lastChild;
-                        const newRange = document.createRange();
-                        newRange.selectNodeContents(textChild);
-                        newRange.collapse(false);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);
-                    } else {
-                        const newRange = document.createRange();
-                        newRange.selectNodeContents(anchorNode.lastChild);
-                        newRange.collapse(false);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);
-                     }
-        
+                        newPlacement = newPlacement.lastChild;
+                    }                    
+                    const newRange = document.createRange();
+                    newRange.selectNodeContents(newPlacement);
+                    newRange.collapse(false);
+                    selection.removeAllRanges();
+                    selection.addRange(newRange);            
                 }
             }
 
+            // if the anchor node parent happens to be a span, we're in the middle of a markdown tag, let's get back to the parent div if we're adjacent to the tag
+            if (anchorNode.parentNode.nodeName === 'SPAN' && anchorNode.parentNode.className === 'markdown-tag') {
+                console.log('anchorNode.parentNode', anchorNode.parentNode, anchorNode.parentNode.nodeName);
+                console.log('anchorNode parent sibling', anchorNode.parentNode.previousSibling?.nodeName, anchorNode.parentNode.nextSibling?.nodeName);
+                let newPlacement = anchorNode.parentNode;
+                // if the previous sibling is a styled text node and the cursor is at the start, we want to place the cursor at the end of the text node
+                if (anchorNode.parentNode.previousSibling && ALLOWED_NODE_NAME_REGEX.test(anchorNode.parentNode.previousSibling.nodeName) && range.startOffset === 0) {
+                    console.log('found previous sibling');
+                    // place the range in the previous sibling
+                     let newPlacement = anchorNode.parentNode.previousSibling;
+                    console.log('newPlacement.lastChild', newPlacement.lastChild, newPlacement.lastChild.nodeName);
+                    if (newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
+                        console.log('found text node');
+                        newPlacement = newPlacement.lastChild;
+                    }
+                    const newRange = document.createRange();
+                    newRange.selectNodeContents(newPlacement);
+                    newRange.collapse(false);
+                    selection.removeAllRanges();
+                    selection.addRange(newRange);
+                } else if (anchorNode.parentNode.nextSibling && ALLOWED_NODE_NAME_REGEX.test(anchorNode.parentNode.nextSibling.nodeName) && range.startOffset === anchorNode.parentNode.textContent.length) { 
+                    console.log('found next sibling');
+                    // place the range in the previous sibling
+                     let newPlacement = anchorNode.parentNode.nextSibling;
+                    console.log('newPlacement.firstChild', newPlacement.firstChild, newPlacement.firstChild.nodeName);
+                    if (newPlacement.firstChild.nodeType === Node.TEXT_NODE) {
+                        console.log('found text node');
+                         newPlacement = newPlacement.firstChild;
+
+                    }       
+                    const newRange = document.createRange();
+                    newRange.setStart(newPlacement, 0);
+                    newRange.setEnd(newPlacement, 0);
+                    selection.removeAllRanges();
+                    selection.addRange(newRange);
+            
+                }
+            } 
+
+            // Get the text before and after the selection for detecting if the markdown syntax is already present
             const { before, selectedText, after } = getSurroundingTextFromSelection();
             console.log('before', before, before.length, 'after', after, after.length, 'selectedText', selectedText);
 
