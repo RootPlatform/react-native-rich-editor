@@ -279,8 +279,9 @@ function createHTML(options = {}) {
          * Unique markers for selection boundaries. These are used to track the cursor position through parsing.
          * These string based boundaries are useful for persisting heavy dom manipulations and string based updates.
          */
-        const MARKER_START = "@@----SELECTION-START----@@";
-        const MARKER_END = "@@----SELECTION-END----@@";
+        const timestamp = Date.now();
+        const MARKER_START = "@@----SELECTION-START-" + timestamp + "----@@";
+        const MARKER_END = "@@----SELECTION-END-" + timestamp + "----@@";
 
         /**
          * Inserts MARKER_START and MARKER_END at the selection boundaries in the editor content to track cursor position.
@@ -1209,23 +1210,24 @@ function createHTML(options = {}) {
                 // basic cursor data - determine if current range is in a bold or italic block
                 // this can be expanded on to include detection for mention and emoji actions
                 const range = window.getSelection().getRangeAt(0);
-                if (!range) return;
-
-                // update selection boundaries to ensure the cursor is in the right place
-                fixSelectionBoundaries();
 
                 const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false } };
-                const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
-                if (isBold) {
-                   cursorData.decorators.bold = true;
-                }       
-                const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
-                if (isItalic) {
-                   cursorData.decorators.italic = true;
-                }
-                const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
-                if (isStrikeThrough) {
-                   cursorData.decorators.strikeThrough = true;
+                if (range) {
+                    // update selection boundaries to ensure the cursor is in the right place
+                    fixSelectionBoundaries();
+
+                    const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
+                    if (isBold) {
+                    cursorData.decorators.bold = true;
+                    }       
+                    const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
+                    if (isItalic) {
+                    cursorData.decorators.italic = true;
+                    }
+                    const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
+                    if (isStrikeThrough) {
+                    cursorData.decorators.strikeThrough = true;
+                    }
                 }
   
                 postAction({type: 'SELECTION_CHANGE', data: cursorData });
