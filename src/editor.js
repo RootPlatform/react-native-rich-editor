@@ -519,11 +519,9 @@ function createHTML(options = {}) {
 
             // Look forward from the end of the selection
             for (let i = endOffset; i < text.length; i++) {
-                console.log('text[i]', text[i]);
                 if (isStopCharacter(text[i])) {
                     break;
                 }
-                console.log('textAfterCursor', textAfterCursor);
                 textAfterCursor += text[i];
             }
 

@@ -166,11 +166,9 @@ export default class RichTextEditor extends Component {
           onLink?.(data);
           break;
         case messages.LOG:
-          console.log('FROM EDIT:', ...data);
           break;
         case messages.SELECTION_CHANGE:
           // fire the cursor context listener with data from the message
-          console.log('SELECTION_CHANGE', data);
           if (data.type === 'cursor') {
             that.cursorContextListeners.map(listener => {
               listener(data);
