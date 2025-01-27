@@ -29,6 +29,7 @@ export default class RichTextEditor extends Component {
     that.onMessage = that.onMessage.bind(that);
     that.sendAction = that.sendAction.bind(that);
     that.registerToolbar = that.registerToolbar.bind(that);
+    that.cursorContext = that.subscribeToCursorContext.bind(that);
     that._onKeyboardWillShow = that._onKeyboardWillShow.bind(that);
     that._onKeyboardWillHide = that._onKeyboardWillHide.bind(that);
     that.init = that.init.bind(that);
@@ -39,6 +40,7 @@ export default class RichTextEditor extends Component {
     that._focus = false;
     that.layout = {};
     that.selectionChangeListeners = [];
+    that.cursorContextListeners = []
     const {
       editorStyle: {backgroundColor, color, placeholderColor, initialCSSText, cssText, contentCSSText, caretColor} = {},
       html,
@@ -164,13 +166,19 @@ export default class RichTextEditor extends Component {
           onLink?.(data);
           break;
         case messages.LOG:
-          console.log('FROM EDIT:', ...data);
           break;
         case messages.SELECTION_CHANGE:
-          const items = message.data;
-          that.selectionChangeListeners.map(listener => {
-            listener(items);
-          });
+          // fire the cursor context listener with data from the message
+          if (data.type === 'cursor') {
+            that.cursorContextListeners.map(listener => {
+              listener(data);
+            })
+          }
+          else {
+            that.selectionChangeListeners.map(listener => {
+              listener(data);
+            });
+          }
           break;
         case messages.CONTENT_FOCUSED:
           that._focus = true;
@@ -317,6 +325,10 @@ export default class RichTextEditor extends Component {
 
   registerToolbar(listener) {
     this.selectionChangeListeners = [...this.selectionChangeListeners, listener];
+  }
+
+  subscribeToCursorContext(listener) {
+    this.cursorContextListeners = [...this.cursorContextListeners, listener];
   }
 
   /**
