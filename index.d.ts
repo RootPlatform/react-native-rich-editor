@@ -231,8 +231,9 @@ export type IconRecord = {
   iconSize: number;
 };
 export type SelectionChangeListener = (items: (string | {type: string; value: string})[]) => void;
-export type CursorContext =  { type: 'cursor'; data: { decorators: {bold: boolean; italic: boolean } } }
-export type CursorContextListener = (items: { type: 'cursor'; data: CursorContext }) => void;
+
+export type CursorContext =  {  type: 'cursor'; decorators: { bold: boolean; italic: boolean; strikeThrough: boolean } }
+export type CursorContextListener = (items: CursorContext) => void;
 export declare class RichEditor extends React.Component<RichEditorProps> {
   // Public API
 
@@ -243,7 +244,7 @@ export declare class RichEditor extends React.Component<RichEditorProps> {
 
   registerToolbar: (listener: SelectionChangeListener) => void;
 
-  subscribeToCursorContext: (listener: SelectionChangeListener) => void;
+  subscribeToCursorContext: (listener: CursorContextListener) => void;
 
   /**
    * @deprecated please use onFocus

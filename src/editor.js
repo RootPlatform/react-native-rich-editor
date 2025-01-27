@@ -276,11 +276,95 @@ function createHTML(options = {}) {
         }
 
         /**
-         * Unique markers for selection boundaries. 
-         * These string based boundaries are useful for persisting heavy dom manipulations and string based updates, such as our flattening and parsing functions.
+         * Unique markers for selection boundaries. These are used to track the cursor position through parsing.
+         * These string based boundaries are useful for persisting heavy dom manipulations and string based updates.
          */
         const MARKER_START = "@@----SELECTION-START----@@";
         const MARKER_END = "@@----SELECTION-END----@@";
+
+        /**
+         * Inserts MARKER_START and MARKER_END at the selection boundaries in the editor content to track cursor position.
+         * Note: Prior to insertion, we remove the active selection ranges, so the user won't potentially see a highlight of these tokens.
+         */
+        function insertMarkerTokens() {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+
+            const range = selection.getRangeAt(0);
+            selection.removeAllRanges();
+
+            // If the range is collapsed, insert both markers at the cursor position.
+            if (range.collapsed) {
+                range.insertNode(document.createTextNode(MARKER_END));
+                range.insertNode(document.createTextNode(MARKER_START));
+            // If the range is not collapsed, insert markers at the start and end boundaries.
+            } else {
+                // Clone the original range so we can manipulate each boundary independently.
+                const startRange = range.cloneRange();
+                const endRange = range.cloneRange();
+
+                // Insert END at the end boundary
+                endRange.collapse(false);
+                endRange.insertNode(document.createTextNode(MARKER_END));
+
+                // Insert START at the start boundary
+                startRange.collapse(true);
+                startRange.insertNode(document.createTextNode(MARKER_START));
+            }
+        }
+
+         /**
+         * Determine the locations of the marker tokens in the editor
+         * Returns the node and offset of the start and end markers, if both exist
+         * Otherwise, returns null
+         */
+        function findMarkerTokensAndPlaceRanges(element) {
+            let startNode = null;
+            let startOffset = null;
+            let endNode = null; 
+            let endOffset = null;
+
+            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
+
+            while (walker.nextNode()) {
+                const node = walker.currentNode;
+                const text = node.nodeValue;
+
+                // Look for MARKER_START
+                const startIndex = text.indexOf(MARKER_START);
+                if (startIndex !== -1) {
+                    startNode = node;
+                    // selection start offset is exactly where the token begins
+                    startOffset = startIndex;
+
+                    // remove the MARKER_START token
+                    node.nodeValue = text.slice(0, startIndex) + text.slice(startIndex + MARKER_START.length);
+                }
+
+                // Look for MARKER_END
+                const newText = node.nodeValue;
+                const endIndex = newText.indexOf(MARKER_END);
+                if (endIndex !== -1) {
+                    endNode = node;
+                    endOffset = endIndex;
+
+                    // remove the MARKER_END token
+                    endNode.nodeValue = newText.slice(0, endIndex) + newText.slice(endIndex + MARKER_END.length);
+                    break;
+                }
+            }
+
+            // Restore cursor position
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+
+            // Remove active selection ranges    
+            selection.removeAllRanges();
+            // Add the new range to selection
+            selection.addRange(range);
+        }
 
         /*
         * Strip and flatten markup to start with clean text for markdown parsing
@@ -362,7 +446,7 @@ function createHTML(options = {}) {
                                 applyMarkdownSyntax(italic);
                     } else if (strike && sContent && !isMatchOnSelectionMarkers(sContent)) {
                         return applyMarkdownSyntax(strike) +
-                                '<span style="text-decoration: line-through;">' + sContent + '</span>' +
+                                '<s>' + sContent + '</s>' +
                                 applyMarkdownSyntax(strike);
                     }
                     return match;
@@ -373,187 +457,55 @@ function createHTML(options = {}) {
         /**
         * Parse the editor content and apply markdown syntax
         */
-        function parseMarkdown() {
+       function parseMarkdown() {
             const editorContent = editor.content;
-        
-            // Save the active cursor position. We'll restore it after parsing.
-            const selection = window.getSelection();        
-            const range = selection.getRangeAt(0);
-            let cursorOffset = 0;
-            if (range) {
-                const preRange = document.createRange();
-                preRange.setStart(editorContent, 0);
-                preRange.setEnd(range.startContainer, range.startOffset);
-                cursorOffset = preRange.toString().length;
-            }
             
+            // Insert marker tokens at the current selection
+            insertMarkerTokens();
+
             // Create a temporary div
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = editorContent.innerHTML;
-            
-            // Get editor html. User input is escaped at this point.
-            console.log("starting html", tempDiv.innerHTML);
 
             // Flatten all elements leaving only allowed <div>, <br>, and text nodes
             stripHTMLAndFlatten(tempDiv);
-            console.log("flattened HTML:", tempDiv.innerHTML);
 
             // Apply markdown styling
-            const parsedHTML = addMarkdownElements(tempDiv);
-            console.log('parsed HTML', parsedHTML)
+            const parsedHTML = addMarkdownElements(tempDiv); 
 
             // Replace editor content with parsed HTML
             editorContent.innerHTML = parsedHTML;
 
-            // Restore cursor position.
-            // We do so using our existing cursor offset.
-            const walker = document.createTreeWalker(editorContent, NodeFilter.SHOW_TEXT, null, false);
-            let currentOffset = 0;
-            let found = false;
-            let node;
-
-            while ((node = walker.nextNode())) {
-                const nextOffset = currentOffset + node.length;
-                // Stop if our cursorOffset is less than the nextOffset, meaning the cursor should be in this text node.
-                if (cursorOffset < nextOffset) {
-                    // Place the cursor in the text node at the correct offset, the difference between the cursorOffset and currentOffset. 
-                    const offsetInNode = cursorOffset - currentOffset
-                    
-                    // If we had a range, set the start and end of the range to the new text node and offset.
-                    if (range) {
-                        range.setStart(node, offsetInNode);
-                        range.setEnd(node, offsetInNode);
-                    }
-                    found = true;
-                    break;
-                }
-                currentOffset = nextOffset;
-            }
-
-
-            // If we never found a text node to place the cursor in,
-            // collapse the selection at the end of the content and place cursor at the end.
-            if (range) {
-                if (!found) {
-                    range.selectNodeContents(editorContent);
-                    range.collapse(false);
-                }
-            }
-                
-            // remove active selection ranges
-            selection.removeAllRanges();
-
-            // add the new range to selection
-            selection.addRange(range);
+            // Find the marker tokens in the updated content
+            const markerPositions = findMarkerTokensAndPlaceRanges(editorContent);
         }
 
-        /**
-         * Inserts MARKER_START and MARKER_END at the selection boundaries in the editor content to track cursor position.
-         * Note: Prior to insertion, we remove the active selection ranges, so the user won't potentially see a highlight of these tokens.
-         */
-        function insertMarkerTokens() {
-            const selection = window.getSelection();
-            if (!selection || selection.rangeCount === 0) return;
-
-            const range = selection.getRangeAt(0);
-            selection.removeAllRanges();
-
-            // If the range is collapsed, insert both markers at the cursor position.
-            if (range.collapsed) {
-                range.insertNode(document.createTextNode(MARKER_END));
-                range.insertNode(document.createTextNode(MARKER_START));
-            // If the range is not collapsed, insert markers at the start and end boundaries.
-            } else {
-                // Clone the original range so we can manipulate each boundary independently.
-                const startRange = range.cloneRange();
-                const endRange = range.cloneRange();
-
-                // Insert END at the end boundary
-                endRange.collapse(false);
-                endRange.insertNode(document.createTextNode(MARKER_END));
-
-                // Insert START at the start boundary
-                startRange.collapse(true);
-                startRange.insertNode(document.createTextNode(MARKER_START));
-            }
-        }
-
-         /**
-         * Determine the locations of the marker tokens in the editor
-         * Returns the node and offset of the start and end markers, if both exist
-         * Otherwise, returns null
-         */
-        function findMarkerTokens(element) {
-            let startNode = null;
-            let startOffset = null;
-            let endNode = null; 
-            let endOffset = null;
-
-            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
-
-            while (walker.nextNode()) {
-                const node = walker.currentNode;
-                const text = node.nodeValue;
-
-                // Look for MARKER_START
-                const startIndex = text.indexOf(MARKER_START);
-                if (startIndex !== -1) {
-                    startNode = node;
-                    // selection start offset is exactly where the token begins
-                    startOffset = startIndex;
-
-                    // remove the MARKER_START token
-                    node.nodeValue = text.slice(0, startIndex) + text.slice(startIndex + MARKER_START.length);
-                }
-
-                // Look for MARKER_END
-                const newText = node.nodeValue;
-                const endIndex = newText.indexOf(MARKER_END);
-                if (endIndex !== -1) {
-                    endNode = node;
-                    endOffset = endIndex;
-
-                    // remove the MARKER_END token
-                    endNode.nodeValue = newText.slice(0, endIndex) + newText.slice(endIndex + MARKER_END.length);
-                    break;
-                }
-            }
-
-            // If we successfully found both start & end
-            if (startNode && endNode) {
-                return { startNode, startOffset, endNode, endOffset };
-            }
-
-            // If we found only one or neither, return null
-            return null;
-        }
-        
         function getSurroundingTextFromSelection() {
             const selection = window.getSelection();
+
+            // exit if no selection
             if (!selection || selection.rangeCount === 0) {
-                return { before: "", selectedText: "", after: "" };
+                return { textBeforeCursor: "", textAfterCursor: "" };
             }
 
             const range = selection.getRangeAt(0);
-            console.log('range', range, range.startContainer, range.startContainer, range.startOffset, range.endOffset);
+
+            // exit if the range is not a text node
             if (range.startContainer.nodeType !== Node.TEXT_NODE) {
-               return { before: "", selectedText: "", after: "" };
+               return { textBeforeCursor: "", textAfterCursor: "" };
             }
 
             const textNode = range.startContainer;
             const text = textNode.textContent;
 
-            console.log('text', text);
             const startOffset = range.startOffset;
             const endOffset = range.endOffset; // Handles the active selection length
-            const selectedText = selection.toString(); // Directly get the selected string
 
-            let before = "";
-            let after = "";
+            let textBeforeCursor = "";
+            let textAfterCursor = "";
 
             // Helper function to check if a character should stop the traversal
             function isStopCharacter(char) {
-                console.log('char', char, typeof char, char.length);
                 return !char.trim() || char === "\\s+" || char === "*" || char === "\`" || char === "~";
             }
 
@@ -562,21 +514,20 @@ function createHTML(options = {}) {
                 if (isStopCharacter(text[i])) {
                     break;
                 }
-                before += text[i]
+                textBeforeCursor += text[i]
             }
-            console.log('before', before);
+
             // Look forward from the end of the selection
             for (let i = endOffset; i < text.length; i++) {
                 console.log('text[i]', text[i]);
                 if (isStopCharacter(text[i])) {
                     break;
                 }
-                console.log('after', after);
-                after += text[i];
+                console.log('textAfterCursor', textAfterCursor);
+                textAfterCursor += text[i];
             }
-            // console.log('after', after);
 
-            return { before, selectedText, after };
+            return { textBeforeCursor, textAfterCursor };
         }
 
         // Define the markers for different Markdown styles.
@@ -586,7 +537,7 @@ function createHTML(options = {}) {
             strikeThrough: '~~',
             code: '\`'
         };
-
+        
         /**
          * Toggle markdown function for bold, italic, etc.
          * Inserts marker start and end around selection, then
@@ -595,7 +546,6 @@ function createHTML(options = {}) {
          * Run function to add back markdown elements
          * Place cursor back in the right position with the markers
          */
-        const ALLOWED_NODE_NAME_REGEX = /^(B|I|SPAN)$/;
         function toggleMarkdown(markdownType) {
             const editorContent = editor.content;
 
@@ -610,82 +560,20 @@ function createHTML(options = {}) {
             // if no cursor in the document, return
             if (!selection.rangeCount) return;
 
-            let range = selection.getRangeAt(0);
-            let anchorNode = range.startContainer;
-            let before = "";
-            let after = "";
+            const range = selection.getRangeAt(0);
+            const anchorNode = range.startContainer;
+            let textBeforeCursor = "";
+            let textAfterCursor = "";
             console.log('anchorNode', anchorNode, anchorNode.nodeName, anchorNode===editorContent);
-
-            if (selection.isCollapsed) {
-                // Edge cases for cursor placement
-                // if anchor node happens to be the editor, we're outside of the bounds of the rest of the content which can lead to unexpected behavior
-                if (anchorNode === editorContent) {
-                    // place the range in the last child of the editor
-                    console.log('anchorNode.lastChild', anchorNode.lastChild, anchorNode.lastChild?.nodeName);
-                    if (anchorNode.lastChild && anchorNode.lastChild.nodeName === 'DIV') {
-                        let newPlacement = anchorNode.lastChild;
-                        console.log('anchorNode.lastChild.lastChild', anchorNode.lastChild.lastChild, anchorNode.lastChild.lastChild.nodeName);
-                        if (newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
-                        console.log('found text node');
-                            newPlacement = newPlacement.lastChild;
-                        }                    
-                        const newRange = document.createRange();
-                        newRange.selectNodeContents(newPlacement);
-                        newRange.collapse(false);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);            
-                    }
-                }
-
-                // if the anchor node parent happens to be a span, we're in the middle of a markdown tag, let's get back to the parent div if we're adjacent to the tag
-                if (anchorNode.parentNode.nodeName === 'SPAN' && anchorNode.parentNode.className === 'markdown-tag') {
-                    console.log('anchorNode.parentNode', anchorNode.parentNode, anchorNode.parentNode.nodeName);
-                    console.log('anchorNode parent sibling', anchorNode.parentNode.previousSibling?.nodeName, anchorNode.parentNode.nextSibling?.nodeName);
-                    let newPlacement = anchorNode.parentNode;
-                    // if the previous sibling is a styled text node and the cursor is at the start, we want to place the cursor at the end of the text node
-                    if (anchorNode.parentNode.previousSibling && ALLOWED_NODE_NAME_REGEX.test(anchorNode.parentNode.previousSibling.nodeName) && range.startOffset === 0) {
-                        console.log('found previous sibling');
-                        // place the range in the previous sibling
-                        let newPlacement = anchorNode.parentNode.previousSibling;
-                        console.log('newPlacement.lastChild', newPlacement.lastChild, newPlacement.lastChild.nodeName);
-                        if (newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
-                            console.log('found text node');
-                            newPlacement = newPlacement.lastChild;
-                        }
-                        const newRange = document.createRange();
-                        newRange.selectNodeContents(newPlacement);
-                        newRange.collapse(false);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);
-                    } else if (anchorNode.parentNode.nextSibling && ALLOWED_NODE_NAME_REGEX.test(anchorNode.parentNode.nextSibling.nodeName) && range.startOffset === anchorNode.parentNode.textContent.length) { 
-                        console.log('found next sibling');
-                        // place the range in the previous sibling
-                        let newPlacement = anchorNode.parentNode.nextSibling;
-                        console.log('newPlacement.firstChild', newPlacement.firstChild, newPlacement.firstChild.nodeName);
-                        if (newPlacement.firstChild.nodeType === Node.TEXT_NODE) {
-                            console.log('found text node');
-                            newPlacement = newPlacement.firstChild;
-
-                        }       
-                        const newRange = document.createRange();
-                        newRange.setStart(newPlacement, 0);
-                        newRange.setEnd(newPlacement, 0);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);
-                
-                    }
-                } 
-                // With a collapsed range, detect the text before and after the selection to see if the markdown syntax is already present
-                const surroundingText = getSurroundingTextFromSelection();
-                before = surroundingText.before;
-                after = surroundingText.after;
-            }
-
-            // console.log('before', before, before.length, 'after', after, after.length, 'selectedText', selectedText);
+           
+            // With a collapsed range, detect the text before and after the selection to see if the markdown syntax is already present
+            const surroundingText = getSurroundingTextFromSelection();
+            textBeforeCursor = surroundingText.textBeforeCursor;
+            textAfterCursor = surroundingText.textAfterCursor;
+            
                 
             // insert selection tokens to track the selection position through parsing.
             insertMarkerTokens();
-            console.log('markdownSyntax inserted', editorContent.innerHTML);
 
             // Create a temporary div
             const tempDiv = document.createElement('div');
@@ -694,77 +582,173 @@ function createHTML(options = {}) {
             // flatten the content for parsing, this helps handle wider selection ranges
             stripHTMLAndFlatten(tempDiv);
 
-            console.log('content flattened', tempDiv.innerHTML);
-
             // Find the markers in the content, the index is the start of the marker token in the string
             const markerStartIndex = tempDiv.innerHTML.indexOf(MARKER_START);
             const markerEndIndex = tempDiv.innerHTML.indexOf(MARKER_END);
-            console.log('markerStartIndex', markerStartIndex, markerEndIndex);
 
-            const previousSyntaxStart = markerStartIndex - markdownSyntax.length - before.length;
+            const previousSyntaxStart = markerStartIndex - markdownSyntax.length - textBeforeCursor.length;
 
-            const nextSyntaxStart = markerEndIndex + MARKER_END.length + after.length;
+            const nextSyntaxStart = markerEndIndex + MARKER_END.length + textAfterCursor.length;
             const nextSyntaxEnd = nextSyntaxStart + markdownSyntax.length            
 
             // Determine if the text before and after the selection is the markdown syntax
-            const isPreviousTextASyntaxMatch = tempDiv.innerHTML.slice(previousSyntaxStart, markerStartIndex - before.length) === markdownSyntax;
+            const isPreviousTextASyntaxMatch = tempDiv.innerHTML.slice(previousSyntaxStart, markerStartIndex - textBeforeCursor.length) === markdownSyntax;
             const isNextTextASyntaxMatch = tempDiv.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd) === markdownSyntax;
 
             let updatedText; 
-            console.log('tempDiv.innerHTML', tempDiv.innerHTML, tempDiv.innerHTML.slice(previousSyntaxStart, markerStartIndex - before.length),  tempDiv.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd));
             if (isPreviousTextASyntaxMatch && isNextTextASyntaxMatch) {
                 // Remove the syntax
-                console.log('removing syntax', tempDiv.innerHTML.slice(0, previousSyntaxStart - before.length), tempDiv.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length), tempDiv.innerHTML.slice(nextSyntaxEnd));
-                updatedText = tempDiv.innerHTML.slice(0, previousSyntaxStart) + tempDiv.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length) + tempDiv.innerHTML.slice(nextSyntaxEnd);
+                const textBeforeSyntax = tempDiv.innerHTML.slice(0, previousSyntaxStart);
+                const innerText = tempDiv.innerHTML.slice(markerStartIndex - textBeforeCursor.length, markerEndIndex + MARKER_END.length + textAfterCursor.length)
+                const textAfterSyntax = tempDiv.innerHTML.slice(nextSyntaxEnd);
+                updatedText = textBeforeSyntax + innerText + textAfterSyntax;
             } else {
                 // Add the syntax
-                console.log('adding syntax', tempDiv.innerHTML.slice(0, markerStartIndex - before.length), markdownSyntax, tempDiv.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length),  markdownSyntax + tempDiv.innerHTML.slice(nextSyntaxStart));
-                updatedText = tempDiv.innerHTML.slice(0, markerStartIndex - before.length) + markdownSyntax + tempDiv.innerHTML.slice(markerStartIndex - before.length, markerEndIndex + MARKER_END.length + after.length) + markdownSyntax + tempDiv.innerHTML.slice(nextSyntaxStart);
+                const textBeforeSyntax = tempDiv.innerHTML.slice(0, markerStartIndex - textBeforeCursor.length);
+                const innerText = tempDiv.innerHTML.slice(markerStartIndex - textBeforeCursor.length, markerEndIndex + MARKER_END.length + textAfterCursor.length)
+                const textAfterSyntax = tempDiv.innerHTML.slice(nextSyntaxStart);
+                updatedText = textBeforeSyntax + markdownSyntax + innerText + markdownSyntax + textAfterSyntax;
             }
-            console.log('updatedText', updatedText);
+
             // Update the editor content
             tempDiv.innerHTML = updatedText;
 
             // Parse string to add back markdown syntax
-            console.log('parseMarkdown start', tempDiv.innerHTML, range.startContainer.textContent);
             const parsed = addMarkdownElements(tempDiv);
-            console.log('parseMarkdown done', parsed);
 
             // Update the editor content
             editorContent.innerHTML = parsed;
         
-
             // Determine marker locations in the new content
-            const markerPositions = findMarkerTokens(editorContent);
-            // markerPositions is something like: 
-            // { startNode, startOffset, endNode, endOffset } or null if not found
-
-            console.log('markerPositions', markerPositions);
-            const newRange = document.createRange();
-
-            // If found, remove them from the text and reset the selection. Otherwise fallback to just placing the caret at the end
-            if (markerPositions) {
-                const { startNode, startOffset, endNode, endOffset } = markerPositions;
-                newRange.setStart(startNode, startOffset);
-                newRange.setEnd(endNode, endOffset);
-            } else {
-                newRange.selectNodeContents(editorContent);
-                newRange.collapse(false);
-            }
-
-            selection.removeAllRanges();
-            selection.addRange(newRange);
+            const markerPositions = findMarkerTokensAndPlaceRanges(editorContent);
         
             // Alert the component that the content has changed
             const html = Actions.content.getHtml();   
-            console.log('CONTENT_CHANGE html', html);
             postAction({ type: 'CONTENT_CHANGE', data: html });
 
             // Recalculate the height of the editor
             Actions.UPDATE_HEIGHT();
             Actions.UPDATE_OFFSET_Y();
         }
-        
+
+        /**
+         * Given a node and offset, adjust the boundary to ensure the cursor is placed correctly
+        */
+        function adjustBoundary(node, offset) {
+            const editorContent = editor.content;
+            // If boundary node is the editor itself
+            // put the cursor at the end of the last child.
+            if (node === editorContent) {
+                // If there's a last child that’s a div, go inside it
+                if (editorContent.lastChild && editorContent.lastChild.nodeName === 'DIV') {
+                let newPlacement = editorContent.lastChild;
+
+                // If that div’s lastChild is a text node, set boundary there
+                if (newPlacement.lastChild && newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
+                    node = newPlacement.lastChild;
+                    offset = node.nodeValue.length;
+                } else {
+                    // fallback: place boundary at the end of the element
+                    node = newPlacement;
+                    offset = newPlacement.childNodes.length; 
+                }
+                } else {
+                // fallback to the end of the editor
+                node = editorContent;
+                offset = editorContent.childNodes.length;
+                }
+            }
+
+            // If boundary’s parent is a markdown syntax span
+            if (node.parentNode && 
+                node.parentNode.nodeName === 'SPAN' && 
+                node.parentNode.className === 'markdown-tag') {
+
+                let parentSpan = node.parentNode;
+                const spanTextLength = parentSpan.textContent.length;
+
+                // If the node is at the start of a markdown tag, move it into the inner text node child if valid
+                if (offset === 0 && parentSpan.previousSibling) {
+                    const prev = parentSpan.previousSibling;
+                    if (prev.nodeType === Node.TEXT_NODE) {
+                        node = prev;
+                        offset = node.nodeValue.length; // jump to end
+                    } else if (prev.lastChild && prev.lastChild.nodeType === Node.TEXT_NODE) {
+                        node = prev.lastChild;
+                        offset = node.nodeValue.length;
+                    } else {
+                        // fallback: place boundary at the end of prev
+                        node = prev;
+                        offset = prev.childNodes.length;
+                    }
+                } 
+                // If the node is at the end of a markdown tag, move it into the inner text node child if valid
+                else if (offset >= spanTextLength && parentSpan.nextSibling) {
+                    const next = parentSpan.nextSibling;
+                    if (next.nodeType === Node.TEXT_NODE) {
+                        node = next;
+                        offset = 0; // jump to start
+                    } else if (next.firstChild && next.firstChild.nodeType === Node.TEXT_NODE) {
+                        node = next.firstChild;
+                        offset = 0;
+                    } else {
+                        // fallback: place boundary at the start of next
+                        node = next;
+                        offset = 0;
+                    }
+                }
+            }
+
+            return { node, offset };
+        }
+
+        /**
+         * Adjust the selection boundaries to ensure the cursor is placed correctly
+         * This is necessary because the user's selection is not limited to just text nodes and can range across multiple elements.
+         * This function adjusts boundaries for common instances where the user would want to highlight or adjust text within a markdown syntax span.
+        */
+        function fixSelectionBoundaries() {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+
+            const range = selection.getRangeAt(0);
+
+            // Capture the old boundaries
+            const oldStartContainer = range.startContainer;
+            const oldStartOffset = range.startOffset;
+            const oldEndContainer = range.endContainer;
+            const oldEndOffset = range.endOffset;
+
+            // Adjust the START boundary
+            const start = adjustBoundary(range.startContainer, range.startOffset);
+
+            // Adjust the END boundary
+            const end = adjustBoundary(range.endContainer, range.endOffset);
+
+
+            // If no change, return
+            const boundariesUnchanged =
+              start.node === oldStartContainer &&
+              start.offset === oldStartOffset &&
+              end.node === oldEndContainer &&
+              end.offset === oldEndOffset;
+            if (boundariesUnchanged) {
+              return;
+            }
+            // Rebuild the range
+            range.setStart(start.node, start.offset);
+            range.setEnd(end.node, end.offset);
+
+            // Remove all ranges
+            selection.removeAllRanges();
+
+            // Add the new range to the selection
+            selection.addRange(range);
+        }
+
+        /**
+         * Given a range and nodeName, Determines what markdown syntax is present at the cursor position
+        */
         function determineSelectionDecorator(range, nodeName) {
             let parent = range.commonAncestorContainer;
             if (parent.nodeType === Node.TEXT_NODE) {
@@ -776,6 +760,16 @@ function createHTML(options = {}) {
             }
             return parent.nodeName === nodeName;
         };
+
+        // Define the allowed syntax tags
+        const ALLOWED_SYNTAX_TAGS = {
+            italic: 'I',
+            bold: 'B',
+            strikeThrough: 'S',
+        };
+
+        // Track the last content value
+        let lastContent = '';
     
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
@@ -1026,7 +1020,6 @@ function createHTML(options = {}) {
             }
         };
 
-        let lastContent = ''
         var init = function init(settings) {
 
             var paragraphSeparator = settings[defaultParagraphSeparatorString];
@@ -1041,7 +1034,6 @@ function createHTML(options = {}) {
             content.autocomplete = 'off';
             content.className = "pell-content";
             content.oninput = function (_ref) {
-                console.log('content.oninput', content.innerHTML);
                 // var firstChild = _ref.target.firstChild;
                 if ((anchorNode === void 0 || anchorNode === content) && queryCommandValue(formatBlock) === ''){
                     if ( !compositionStatus || anchorNode === content){
@@ -1059,8 +1051,10 @@ function createHTML(options = {}) {
                 saveSelection();
                 handleChange(_ref);
                 settings.onChange();
-               if (content.innerHTML) parseMarkdown()
-               lastContent = content.innerHTML;
+                if (content.innerHTML) {
+                    parseMarkdown()
+                }
+                lastContent = content.innerHTML;
                 ${inputListener} && postAction({type: "ON_INPUT", data: {inputType: _ref.inputType, data: _ref.data}});
             };
             appendChild(settings.element, content);
@@ -1218,17 +1212,25 @@ function createHTML(options = {}) {
                 // this can be expanded on to include detection for mention and emoji actions
                 const range = window.getSelection().getRangeAt(0);
                 if (!range) return;
-                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false } };
-                const isBold = determineSelectionDecorator(range, 'B');
+
+                // update selection boundaries to ensure the cursor is in the right place
+                fixSelectionBoundaries();
+
+                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false } };
+                const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
                 if (isBold) {
                    cursorData.decorators.bold = true;
                 }       
-                const isItalic = determineSelectionDecorator(range, 'I');
+                const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
                 if (isItalic) {
                    cursorData.decorators.italic = true;
                 }
+                const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
+                if (isStrikeThrough) {
+                   cursorData.decorators.strikeThrough = true;
+                }
   
-                postAction({type: 'SELECTION_CHANGE', data: cursorData});
+                postAction({type: 'SELECTION_CHANGE', data: cursorData });
             });
             document.addEventListener("message", message , false);
             window.addEventListener("message", message , false);
