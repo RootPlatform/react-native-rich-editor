@@ -769,6 +769,103 @@ function createHTML(options = {}) {
 
         // Track the last content value
         let lastContent = '';
+
+        /**
+         * Scans backward from the current caret (in a TEXT_NODE)
+         * to see if there's an '@' or '#' with:
+         *   1) No whitespace in between it and the caret.
+         *   2) Whitespace (or start of text) immediately before '@'/'#'.
+         *
+         * If valid, returns the substring from the symbol up to the caret
+         * (e.g. "@Test"). Otherwise, returns ''.
+         */
+        function checkForMention(mentionCharacter) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) {
+                return '';
+            }
+
+            const range = selection.getRangeAt(0);
+            const container = range.startContainer;
+            const offset = range.startOffset;
+            
+            // Must be a text node
+            if (container.nodeType !== Node.TEXT_NODE) {
+                return '';
+            }
+
+            const text = container.textContent;
+            let idx = offset - 1; // Start immediately behind the caret
+
+            // Scan left from the caret
+            while (idx >= 0) {
+                const char = text.charAt(idx);
+
+                // If we hit whitespace first, no valid mention
+                if (/\\s/.test(char)) {
+                return '';
+                }
+
+                // If we find '@' or '#', verify it's at a word boundary
+                if (char === mentionCharacter) {
+                // Check if it's the start of the text node or preceded by whitespace
+                if (idx > 0) {
+                    const prevChar = text.charAt(idx - 1);
+                    // If previous char isn't whitespace, it's "in the middle of a word"
+                    if (!/\\s/.test(prevChar)) {
+                    return '';
+                    }
+                }
+
+                // We have a valid boundary and no whitespace from the symbol to caret
+                return text.substring(idx + 1, offset);
+                }
+
+                idx--;
+            }
+
+            // If we never find a valid symbol, return ''
+            return '';
+        }
+
+        
+        function handleCursorDetection() {
+            console.log('selection change')
+            // basic cursor data - determine if current range is in a bold or italic block
+            // this can be expanded on to include detection for mention and emoji actions
+            const range = window.getSelection().getRangeAt(0);
+            console.log('range', range);
+            const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false, showMentionWindow: false } };
+            if (range) {
+                // update selection boundaries to ensure the cursor is in the right place
+                fixSelectionBoundaries();
+
+                const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
+                if (isBold) {
+                    cursorData.decorators.bold = true;
+                }       
+                const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
+                if (isItalic) {
+                    cursorData.decorators.italic = true;
+                }
+                const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
+                if (isStrikeThrough) {
+                    cursorData.decorators.strikeThrough = true;
+                }
+                if (!isBold && !isItalic && !isStrikeThrough) {
+                    console.log('check for mention')
+                    const isMention = checkForMention();
+                    if (isMention) {
+                        console.log('mention detected');
+                        cursorData.decorators.showMentionWindow = true;
+                    }
+                    console.log('no mention found')
+                    // detect if we want to do a mention or emoji action
+                }
+            }
+
+            postAction({type: 'SELECTION_CHANGE', data: cursorData });
+     }
     
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
@@ -1206,27 +1303,34 @@ function createHTML(options = {}) {
                 }
             };
             document.addEventListener('selectionchange', () => {
-                console.log('selectionchange');
+                console.log('selection change')
                 // basic cursor data - determine if current range is in a bold or italic block
                 // this can be expanded on to include detection for mention and emoji actions
                 const range = window.getSelection().getRangeAt(0);
-
-                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false } };
+                console.log('range', range);
+                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '' };
                 if (range) {
                     // update selection boundaries to ensure the cursor is in the right place
                     fixSelectionBoundaries();
 
                     const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
                     if (isBold) {
-                    cursorData.decorators.bold = true;
+                        cursorData.decorators.bold = true;
                     }       
                     const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
                     if (isItalic) {
-                    cursorData.decorators.italic = true;
+                        cursorData.decorators.italic = true;
                     }
                     const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
                     if (isStrikeThrough) {
-                    cursorData.decorators.strikeThrough = true;
+                        cursorData.decorators.strikeThrough = true;
+                    }
+                    if (!isBold && !isItalic && !isStrikeThrough) {
+                        console.log('check for mention')
+
+                        cursorData.channelMention = checkForMention('#');
+                        cursorData.userMention = checkForMention('@');
+                        // detect if we want to do a mention or emoji action
                     }
                 }
   
