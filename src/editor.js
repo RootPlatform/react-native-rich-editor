@@ -638,11 +638,11 @@ function createHTML(options = {}) {
             // If boundary node is the editor itself
             // put the cursor at the end of the last child.
             if (node === editorContent) {
-                // If there's a last child that’s a div, go inside it
+                // If there's a last child that's a div, go inside it
                 if (editorContent.lastChild && editorContent.lastChild.nodeName === 'DIV') {
                 let newPlacement = editorContent.lastChild;
 
-                // If that div’s lastChild is a text node, set boundary there
+                // If that div's lastChild is a text node, set boundary there
                 if (newPlacement.lastChild && newPlacement.lastChild.nodeType === Node.TEXT_NODE) {
                     node = newPlacement.lastChild;
                     offset = node.nodeValue.length;
@@ -658,7 +658,7 @@ function createHTML(options = {}) {
                 }
             }
 
-            // If boundary’s parent is a markdown syntax span
+            // If boundary's parent is a markdown syntax span
             if (node.parentNode && 
                 node.parentNode.nodeName === 'SPAN' && 
                 node.parentNode.className === 'markdown-tag') {
@@ -818,7 +818,7 @@ function createHTML(options = {}) {
                 }
 
                 // We have a valid boundary and no whitespace from the symbol to caret
-                return text.substring(idx + 1, offset);
+                return text.substring(idx, offset);
                 }
 
                 idx--;
@@ -1302,39 +1302,54 @@ function createHTML(options = {}) {
                     }
                 }
             };
+            let debounceTimeout;
+            const debounceDelay = 50;
+
             document.addEventListener('selectionchange', () => {
-                console.log('selection change')
-                // basic cursor data - determine if current range is in a bold or italic block
-                // this can be expanded on to include detection for mention and emoji actions
-                const range = window.getSelection().getRangeAt(0);
-                console.log('range', range);
-                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '' };
-                if (range) {
-                    // update selection boundaries to ensure the cursor is in the right place
-                    fixSelectionBoundaries();
+                console.log('selection change');
 
-                    const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
-                    if (isBold) {
-                        cursorData.decorators.bold = true;
-                    }       
-                    const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
-                    if (isItalic) {
-                        cursorData.decorators.italic = true;
-                    }
-                    const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
-                    if (isStrikeThrough) {
-                        cursorData.decorators.strikeThrough = true;
-                    }
-                    if (!isBold && !isItalic && !isStrikeThrough) {
-                        console.log('check for mention')
-
-                        cursorData.channelMention = checkForMention('#');
-                        cursorData.userMention = checkForMention('@');
-                        // detect if we want to do a mention or emoji action
-                    }
-                }
   
-                postAction({type: 'SELECTION_CHANGE', data: cursorData });
+                const handleSelectionChange = () => {
+                    // basic cursor data - determine if current range is in a bold or italic block
+                    // this can be expanded on to include detection for mention and emoji actions
+                    const range = window.getSelection().getRangeAt(0);
+                    console.log('range', range);
+                    const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '' };
+                    if (range) {
+                        // update selection boundaries to ensure the cursor is in the right place
+                        fixSelectionBoundaries();
+
+                        const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
+                        if (isBold) {
+                            cursorData.decorators.bold = true;
+                        }       
+                        const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
+                        if (isItalic) {
+                            cursorData.decorators.italic = true;
+                        }
+                        const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
+                        if (isStrikeThrough) {
+                            cursorData.decorators.strikeThrough = true;
+                        }
+                        if (!isBold && !isItalic && !isStrikeThrough) {
+                            console.log('check for mention');
+
+                            cursorData.channelMention = checkForMention('#');
+                            cursorData.userMention = checkForMention('@');
+                            // detect if we want to do a mention or emoji action
+                        }
+                    }
+                    postAction({type: 'SELECTION_CHANGE', data: cursorData });
+                    clearTimeout(debounceTimeout);
+                };
+
+                const debouncedSelectionChange = () => {
+                    if (!debounceTimeout) {
+                        debounceTimeout = setTimeout(handleSelectionChange, debounceDelay);
+                    }
+                };
+
+                debouncedSelectionChange();
             });
             document.addEventListener("message", message , false);
             window.addEventListener("message", message , false);
