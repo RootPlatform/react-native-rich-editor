@@ -863,6 +863,8 @@ function createHTML(options = {}) {
             // If we never find a valid mention symbol, return ''
             return '';
         }
+
+
         function insertMention(mentionType, mentionText) {
             let mentionClass = '';
             let mentionCharacter = '';
@@ -887,90 +889,67 @@ function createHTML(options = {}) {
             const container = range.startContainer;
             const offset = range.startOffset;
 
+            let mentionSpan = null;
 
             // 1) Check if we are already inside an existing mention span
-            //    i.e., if the parent is a <span> whose class includes "mention-"
             if (
                 container.nodeType === Node.TEXT_NODE &&
                 container.parentNode.nodeType === Node.ELEMENT_NODE &&
                 container.parentNode.className.startsWith("mention")
             ) {
                 // We are inside an existing mention span. Replace its text content.
-                const existingMentionSpan = container.parentNode;
-                existingMentionSpan.textContent = mentionText;
+                mentionSpan = container.parentNode;
+                mentionSpan.textContent = mentionText;
+            } else {
+                // Make sure we're dealing with a text node
+                if (container.nodeType !== Node.TEXT_NODE) {
+                    return;
+                }
 
-                // Optionally, add a trailing space node after the mention
-                // so that the user clearly sees they're no longer editing inside the mention
-                const spaceNode = document.createTextNode("\u00A0"); // non-breaking space
-                existingMentionSpan.parentNode.insertBefore(spaceNode, existingMentionSpan.nextSibling);
+                const textContent = container.textContent;
 
-                // Place the caret at the end of that space node
-                const newRange = document.createRange();
-                newRange.setStart(spaceNode, spaceNode.textContent.length);
-                newRange.collapse(true);
+                // 1) Find the last occurrence of mentionCharacter before the caret
+                const mentionStartIndex = textContent.lastIndexOf(mentionCharacter, offset - 1);
+                if (mentionStartIndex === -1) {
+                    // No @ (or #) found behind the caret, so nothing to replace
+                    return;
+                }
 
-                selection.removeAllRanges();
-                selection.addRange(newRange);
+                // 2) Extract the substring that we consider the "mention search"
+                const mentionSearchText = textContent.slice(mentionStartIndex, offset);
 
-                // Trigger your "content updated" logic
-                const html = Actions.content.getHtml();
-                postAction({ type: "CONTENT_CHANGE", data: html });
-                Actions.UPDATE_HEIGHT();
-                Actions.UPDATE_OFFSET_Y();
+                // 3) Split out the text around that mention
+                const beforeMention = textContent.slice(0, mentionStartIndex);
+                const afterMention = textContent.slice(offset);
 
-                // We are done updating the existing mention, so return
-                return;
+                // 4) Create the <span> for our mention
+                mentionSpan = document.createElement('span');
+                mentionSpan.className = mentionClass;
+                mentionSpan.textContent = mentionText;
+
+                // 5) Insert the newly-created pieces into the DOM
+                const parentNode = container.parentNode;
+
+                // -- text before mention
+                if (beforeMention) {
+                    parentNode.insertBefore(document.createTextNode(beforeMention), container);
+                }
+
+                // -- mention span
+                parentNode.insertBefore(mentionSpan, container);
+
+                // -- text after mention
+                if (afterMention) {
+                    parentNode.insertBefore(document.createTextNode(afterMention), container);
+                }
+
+                // Remove the original text node now that its split/replaced
+                parentNode.removeChild(container);
             }
-            // Make sure we're dealing with a text node
-            if (container.nodeType !== Node.TEXT_NODE) {
-                return;
-            }
-
-            const textContent = container.textContent;
-
-            // 1) Find the last occurrence of mentionCharacter before the caret
-            //    e.g. if mentionCharacter = "@", we look for the last "@" before offset.
-            const mentionStartIndex = textContent.lastIndexOf(mentionCharacter, offset - 1);
-            if (mentionStartIndex === -1) {
-                // No @ (or #) found behind the caret, so nothing to replace
-                return;
-            }
-
-            // 2) Extract the substring that we consider the "mention search"
-            //    from mentionStartIndex to the cursor. 
-            const mentionSearchText = textContent.slice(mentionStartIndex, offset);
-
-            // 3) Split out the text around that mention
-            const beforeMention = textContent.slice(0, mentionStartIndex);
-            const afterMention = textContent.slice(offset);
-
-            // 4) Create the <span> for our mention
-            const mentionSpan = document.createElement('span');
-            mentionSpan.className = mentionClass;
-            mentionSpan.textContent = mentionText; // The final text you want to show
-
-            // 5) Insert the newly-created pieces into the DOM
-            const parentNode = container.parentNode;
-
-            // -- text before mention
-            if (beforeMention) {
-                parentNode.insertBefore(document.createTextNode(beforeMention), container);
-            }
-
-            // -- mention span
-            parentNode.insertBefore(mentionSpan, container);
-
-            // -- text after mention
-            if (afterMention) {
-                parentNode.insertBefore(document.createTextNode(afterMention), container);
-            }
-
-            // Remove the original text node now that its split/replaced
-            parentNode.removeChild(container);
 
             // Insert the space node (so there's a visible space after the mention)
             const spaceNode = document.createTextNode('\u00A0');
-            parentNode.insertBefore(spaceNode, mentionSpan.nextSibling);
+            mentionSpan.parentNode.insertBefore(spaceNode, mentionSpan.nextSibling);
 
             // Place caret at the END of the space node
             const newRange = document.createRange();
@@ -979,12 +958,78 @@ function createHTML(options = {}) {
 
             selection.removeAllRanges();
             selection.addRange(newRange);
-            
+
             // Trigger your "content updated" logic
             const html = Actions.content.getHtml();
             postAction({ type: 'CONTENT_CHANGE', data: html });
             Actions.UPDATE_HEIGHT();
             Actions.UPDATE_OFFSET_Y();
+        }
+
+        /**
+         * Finds an ancestor element of node that is a <span> with a class name
+         * starting with "mention". Returns that ancestor if found, otherwise null.
+         */
+            function findMentionSpanAncestor(node) {
+            while (node && node !== document.documentElement) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                if (
+                    node.tagName === 'SPAN' &&
+                    node.className &&
+                    node.className.trim().startsWith('mention')
+                ) {
+                    return node;
+                }
+                }
+                node = node.parentNode;
+            }
+            return null;
+            }
+
+        /**
+         * Unwraps the ancestor span (with a class name starting "mention") if
+         * the current selection's entire range is inside that span.
+         * We preserve the original text node(s) and the selection range.
+         */
+        function cleanupMentionEdit() {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+
+            const range = selection.getRangeAt(0);
+
+            // Remember start/end containers and offsets
+            const startNode   = range.startContainer;
+            const startOffset = range.startOffset;
+            const endNode     = range.endContainer;
+            const endOffset   = range.endOffset;
+
+            // Find potential "mention" ancestor for both start and end
+            const mentionAncestorStart = findMentionSpanAncestor(startNode);
+            const mentionAncestorEnd   = findMentionSpanAncestor(endNode);
+
+            // If both ends are inside the same mention span
+            if (mentionAncestorStart && mentionAncestorStart === mentionAncestorEnd) {
+                const mentionSpan = mentionAncestorStart;
+
+                // --- Unwrap the mention span by moving its children (text nodes, etc.)
+                //     up into the span's parent.
+                const parent = mentionSpan.parentNode;
+                const nextSibling = mentionSpan.nextSibling;
+                
+                // Move all child nodes of <span> before the <span> itself
+                while (mentionSpan.firstChild) {
+                parent.insertBefore(mentionSpan.firstChild, nextSibling);
+                }
+
+                // Finally, remove the empty <span>
+                parent.removeChild(mentionSpan);
+
+                // --- Restore the original selection using the same node references and offsets
+                selection.removeAllRanges();  // Clear existing selection
+                range.setStart(startNode, startOffset);
+                range.setEnd(endNode, endOffset);
+                selection.addRange(range);
+            }
         }
 
         var Actions = {
@@ -1269,7 +1314,8 @@ function createHTML(options = {}) {
                 handleChange(_ref);
                 settings.onChange();
                 if (content.innerHTML) {
-                    parseMarkdown()
+                    cleanupMentionEdit();
+                    parseMarkdown();
                 }
                 lastContent = content.innerHTML;
                 ${inputListener} && postAction({type: "ON_INPUT", data: {inputType: _ref.inputType, data: _ref.data}});
