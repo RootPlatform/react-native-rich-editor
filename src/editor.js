@@ -378,6 +378,13 @@ function createHTML(options = {}) {
             }
         }
 
+        /**
+         * Check if the element is a mention
+         */
+        function isMention(element) {
+            return element.tagName === 'SPAN' && element.className.startsWith('mention');
+        }
+
         /* 
         * Single pass that flattens current markup.
         * Returns true if it flattened something, meaning we might need another pass.
@@ -394,7 +401,7 @@ function createHTML(options = {}) {
                 if (child.nodeType === Node.ELEMENT_NODE) {
                 const tagName = child.nodeName.toUpperCase();
 
-                if (!ALLOWED_TAGS.includes(tagName)) {
+                if (!ALLOWED_TAGS.includes(tagName) && !isMention(child)) {
                     // Flatten: move its children up, remove the node
                     didChange = true;
                     while (child.firstChild) {
@@ -771,104 +778,218 @@ function createHTML(options = {}) {
         let lastContent = '';
 
         /**
-         * Scans backward from the current caret (in a TEXT_NODE)
-         * to see if there's an '@' or '#' with:
-         *   1) No whitespace in between it and the caret.
-         *   2) Whitespace (or start of text) immediately before '@'/'#'.
-         *
-         * If valid, returns the substring from the symbol up to the caret
-         * (e.g. "@Test"). Otherwise, returns ''.
+         * Uses getSurroundingTextFromSelection to see if there's an '@' or '#' 
+         * near the caret with no whitespace in between. Also detects if the 
+         * cursor is inside a <span class="mention"> from a previous mention.
          */
         function checkForMention(mentionCharacter) {
             const selection = window.getSelection();
-            if (!selection.rangeCount) {
+            if (!selection || !selection.rangeCount) {
                 return '';
             }
 
             const range = selection.getRangeAt(0);
             const container = range.startContainer;
-            const offset = range.startOffset;
-            
-            // Must be a text node
+
+            // 1) If the caret is within a SPAN that looks like a mention,
+            //    return that entire span's text content.
+            //    (Adjust logic as needed if your mention spans have different naming, etc.)
+            if (
+                container.nodeType === Node.ELEMENT_NODE &&
+                container.nodeName === 'SPAN' &&
+                container.className.startsWith('mention')
+            ) {
+                return container.textContent || '';
+            }
+
+            // Alternatively, if the caret is inside the text node child of a mention span
+            // (for instance, <span class="mention">some text node</span>),
+            // we can detect that by checking the parent node:
+            if (
+                container.nodeType === Node.TEXT_NODE &&
+                container.parentNode.nodeName === 'SPAN' &&
+                container.parentNode.className.startsWith('mention')
+            ) {
+                // If you want to treat cursor-inside-mention the same way, you can do:
+                return container.parentNode.textContent || '';
+            }
+
+            // 2) If not inside an existing mention, we do the normal mention check on a text node
             if (container.nodeType !== Node.TEXT_NODE) {
                 return '';
             }
 
-            const text = container.textContent;
-            let idx = offset - 1; // Start immediately behind the caret
+            // Use your helper to get text before/after the cursor (with 'stop' characters)
+            const { textBeforeCursor, textAfterCursor } = getSurroundingTextFromSelection();
 
-            // Scan left from the caret
-            while (idx >= 0) {
-                const char = text.charAt(idx);
+            // NOTE: textBeforeCursor is built in reverse by the helper function,
+            // so we reverse it back to normal order:
+            const reversedBeforeCursor = textBeforeCursor.split('').reverse().join('');
+
+            // 3) Check if there's whitespace immediately after the cursor
+            //    (or if we're at the end of the node), as per your original logic
+            if (textAfterCursor.length > 0) {
+                // If the first char after cursor is NOT whitespace, bail out
+                if (!/\\s/.test(textAfterCursor[0])) {
+                    return '';
+                }
+            }
+
+            // 4) Scan left in reversedBeforeCursor to find the mentionCharacter
+            //    with no whitespace in between
+            let i = reversedBeforeCursor.length - 1;
+            while (i >= 0) {
+                const c = reversedBeforeCursor[i];
 
                 // If we hit whitespace first, no valid mention
-                if (/\\s/.test(char)) {
-                return '';
-                }
-
-                // If we find '@' or '#', verify it's at a word boundary
-                if (char === mentionCharacter) {
-                // Check if it's the start of the text node or preceded by whitespace
-                if (idx > 0) {
-                    const prevChar = text.charAt(idx - 1);
-                    // If previous char isn't whitespace, it's "in the middle of a word"
-                    if (!/\\s/.test(prevChar)) {
+                if (/\\s/.test(c)) {
                     return '';
+                }
+
+                // If we find our mention symbol, verify it's at a word boundary
+                if (c === mentionCharacter) {
+                    // Check if it's start-of-string or preceded by whitespace
+                    if (i === 0 || /\\s/.test(reversedBeforeCursor[i - 1])) {
+                        // Valid mention boundary found!
+                        return reversedBeforeCursor.slice(i);
                     }
+                    // Otherwise it's "in the middle of a word"
+                    return '';
                 }
 
-                // We have a valid boundary and no whitespace from the symbol to caret
-                return text.substring(idx, offset);
-                }
-
-                idx--;
+                i--;
             }
 
-            // If we never find a valid symbol, return ''
+            // If we never find a valid mention symbol, return ''
             return '';
         }
-
-        
-        function handleCursorDetection() {
-            console.log('selection change')
-            // basic cursor data - determine if current range is in a bold or italic block
-            // this can be expanded on to include detection for mention and emoji actions
-            const range = window.getSelection().getRangeAt(0);
-            console.log('range', range);
-            const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false, showMentionWindow: false } };
-            if (range) {
-                // update selection boundaries to ensure the cursor is in the right place
-                fixSelectionBoundaries();
-
-                const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
-                if (isBold) {
-                    cursorData.decorators.bold = true;
-                }       
-                const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
-                if (isItalic) {
-                    cursorData.decorators.italic = true;
-                }
-                const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
-                if (isStrikeThrough) {
-                    cursorData.decorators.strikeThrough = true;
-                }
-                if (!isBold && !isItalic && !isStrikeThrough) {
-                    console.log('check for mention')
-                    const isMention = checkForMention();
-                    if (isMention) {
-                        console.log('mention detected');
-                        cursorData.decorators.showMentionWindow = true;
-                    }
-                    console.log('no mention found')
-                    // detect if we want to do a mention or emoji action
-                }
+        function insertMention(mentionType, mentionText) {
+            let mentionClass = '';
+            let mentionCharacter = '';
+            if (mentionType === 'user') {
+                mentionClass = 'mention-user';
+                mentionCharacter = '@';
+            } else if (mentionType === 'role') {
+                mentionClass = 'mention-role';
+                mentionCharacter = '@';
+            } else if (mentionType === 'global') {
+                mentionClass = 'mention-global';
+                mentionCharacter = '@';
+            } else if (mentionType === 'channel') {
+                mentionClass = 'mention-channel';
+                mentionCharacter = '#';
             }
 
-            postAction({type: 'SELECTION_CHANGE', data: cursorData });
-     }
-    
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.startContainer;
+            const offset = range.startOffset;
+
+
+            // 1) Check if we are already inside an existing mention span
+            //    i.e., if the parent is a <span> whose class includes "mention-"
+            if (
+                container.nodeType === Node.TEXT_NODE &&
+                container.parentNode.nodeType === Node.ELEMENT_NODE &&
+                container.parentNode.className.startsWith("mention")
+            ) {
+                // We are inside an existing mention span. Replace its text content.
+                const existingMentionSpan = container.parentNode;
+                existingMentionSpan.textContent = mentionText;
+
+                // Optionally, add a trailing space node after the mention
+                // so that the user clearly sees they're no longer editing inside the mention
+                const spaceNode = document.createTextNode("\u00A0"); // non-breaking space
+                existingMentionSpan.parentNode.insertBefore(spaceNode, existingMentionSpan.nextSibling);
+
+                // Place the caret at the end of that space node
+                const newRange = document.createRange();
+                newRange.setStart(spaceNode, spaceNode.textContent.length);
+                newRange.collapse(true);
+
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+
+                // Trigger your "content updated" logic
+                const html = Actions.content.getHtml();
+                postAction({ type: "CONTENT_CHANGE", data: html });
+                Actions.UPDATE_HEIGHT();
+                Actions.UPDATE_OFFSET_Y();
+
+                // We are done updating the existing mention, so return
+                return;
+            }
+            // Make sure we're dealing with a text node
+            if (container.nodeType !== Node.TEXT_NODE) {
+                return;
+            }
+
+            const textContent = container.textContent;
+
+            // 1) Find the last occurrence of mentionCharacter before the caret
+            //    e.g. if mentionCharacter = "@", we look for the last "@" before offset.
+            const mentionStartIndex = textContent.lastIndexOf(mentionCharacter, offset - 1);
+            if (mentionStartIndex === -1) {
+                // No @ (or #) found behind the caret, so nothing to replace
+                return;
+            }
+
+            // 2) Extract the substring that we consider the "mention search"
+            //    from mentionStartIndex to the cursor. 
+            const mentionSearchText = textContent.slice(mentionStartIndex, offset);
+
+            // 3) Split out the text around that mention
+            const beforeMention = textContent.slice(0, mentionStartIndex);
+            const afterMention = textContent.slice(offset);
+
+            // 4) Create the <span> for our mention
+            const mentionSpan = document.createElement('span');
+            mentionSpan.className = mentionClass;
+            mentionSpan.textContent = mentionText; // The final text you want to show
+
+            // 5) Insert the newly-created pieces into the DOM
+            const parentNode = container.parentNode;
+
+            // -- text before mention
+            if (beforeMention) {
+                parentNode.insertBefore(document.createTextNode(beforeMention), container);
+            }
+
+            // -- mention span
+            parentNode.insertBefore(mentionSpan, container);
+
+            // -- text after mention
+            if (afterMention) {
+                parentNode.insertBefore(document.createTextNode(afterMention), container);
+            }
+
+            // Remove the original text node now that its split/replaced
+            parentNode.removeChild(container);
+
+            // Insert the space node (so there's a visible space after the mention)
+            const spaceNode = document.createTextNode('\u00A0');
+            parentNode.insertBefore(spaceNode, mentionSpan.nextSibling);
+
+            // Place caret at the END of the space node
+            const newRange = document.createRange();
+            newRange.setStart(spaceNode, spaceNode.textContent.length);
+            newRange.collapse(true);
+
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+            
+            // Trigger your "content updated" logic
+            const html = Actions.content.getHtml();
+            postAction({ type: 'CONTENT_CHANGE', data: html });
+            Actions.UPDATE_HEIGHT();
+            Actions.UPDATE_OFFSET_Y();
+        }
+
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
+            insertMention: { result: function (mentionType, mentionText) { return insertMention(mentionType, mentionText) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
             underline: { state: function() { return queryCommandState('underline'); }, result: function() { return exec('underline'); }},
             strikeThrough: { state: function() { return queryCommandState('strikeThrough'); }, result: function() { return exec('strikeThrough'); }},
@@ -1302,54 +1423,39 @@ function createHTML(options = {}) {
                     }
                 }
             };
-            let debounceTimeout;
-            const debounceDelay = 50;
-
             document.addEventListener('selectionchange', () => {
-                console.log('selection change');
+                console.log('selection change')
+                // basic cursor data - determine if current range is in a bold or italic block
+                // this can be expanded on to include detection for mention and emoji actions
+                const range = window.getSelection().getRangeAt(0);
+                console.log('range', range);
+                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '' };
+                if (range) {
+                    // update selection boundaries to ensure the cursor is in the right place
+                    fixSelectionBoundaries();
 
+                    const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
+                    if (isBold) {
+                        cursorData.decorators.bold = true;
+                    }       
+                    const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
+                    if (isItalic) {
+                        cursorData.decorators.italic = true;
+                    }
+                    const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
+                    if (isStrikeThrough) {
+                        cursorData.decorators.strikeThrough = true;
+                    }
+                    if (!isBold && !isItalic && !isStrikeThrough) {
+                        console.log('check for mention')
+
+                        cursorData.channelMention = checkForMention('#');
+                        cursorData.userMention = checkForMention('@');
+                        // detect if we want to do a mention or emoji action
+                    }
+                }
   
-                const handleSelectionChange = () => {
-                    // basic cursor data - determine if current range is in a bold or italic block
-                    // this can be expanded on to include detection for mention and emoji actions
-                    const range = window.getSelection().getRangeAt(0);
-                    console.log('range', range);
-                    const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '' };
-                    if (range) {
-                        // update selection boundaries to ensure the cursor is in the right place
-                        fixSelectionBoundaries();
-
-                        const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
-                        if (isBold) {
-                            cursorData.decorators.bold = true;
-                        }       
-                        const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
-                        if (isItalic) {
-                            cursorData.decorators.italic = true;
-                        }
-                        const isStrikeThrough = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.strikeThrough);
-                        if (isStrikeThrough) {
-                            cursorData.decorators.strikeThrough = true;
-                        }
-                        if (!isBold && !isItalic && !isStrikeThrough) {
-                            console.log('check for mention');
-
-                            cursorData.channelMention = checkForMention('#');
-                            cursorData.userMention = checkForMention('@');
-                            // detect if we want to do a mention or emoji action
-                        }
-                    }
-                    postAction({type: 'SELECTION_CHANGE', data: cursorData });
-                    clearTimeout(debounceTimeout);
-                };
-
-                const debouncedSelectionChange = () => {
-                    if (!debounceTimeout) {
-                        debounceTimeout = setTimeout(handleSelectionChange, debounceDelay);
-                    }
-                };
-
-                debouncedSelectionChange();
+                postAction({type: 'SELECTION_CHANGE', data: cursorData });
             });
             document.addEventListener("message", message , false);
             window.addEventListener("message", message , false);
