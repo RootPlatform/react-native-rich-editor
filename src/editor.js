@@ -381,6 +381,10 @@ function createHTML(options = {}) {
             return element.tagName === 'SPAN' && element.className.startsWith('mention');
         }
 
+        function isMarkdownSyntax(element) {
+            return element.tagName === 'SPAN' && element.className === 'markdown-tag';
+        }
+
         /* 
         * Single pass that flattens current markup.
         * Returns true if it flattened something, meaning we might need another pass.
@@ -540,7 +544,7 @@ function createHTML(options = {}) {
                 if (isStopCharacter(text[i])) {
                     break;
                 }
-                textBeforeCursor += text[i]
+                textBeforeCursor = text[i] + textBeforeCursor;
             }
 
             // Look forward from the end of the selection
@@ -677,21 +681,21 @@ function createHTML(options = {}) {
                     offset = newPlacement.childNodes.length; 
                 }
                 } else {
-                // fallback to the end of the editor
-                node = editorContent;
-                offset = editorContent.childNodes.length;
+                    // fallback to the end of the editor
+                    node = editorContent;
+                    offset = editorContent.childNodes.length;
                 }
             }
 
-            // If boundary's parent is a markdown syntax span
+            // If boundary's parent is a markdown syntax span or a mention span
             if (node.parentNode && 
-                node.parentNode.nodeName === 'SPAN' && 
-                node.parentNode.className === 'markdown-tag') {
+                isMarkdownSyntax(node.parentNode) ||
+                isMention(node.parentNode)) {
 
                 let parentSpan = node.parentNode;
                 const spanTextLength = parentSpan.textContent.length;
 
-                // If the node is at the start of a markdown tag, move it into the inner text node child if valid
+                // If the node is at the start of a span tag, move it into the inner text node child if valid
                 if (offset === 0 && parentSpan.previousSibling) {
                     const prev = parentSpan.previousSibling;
                     if (prev.nodeType === Node.TEXT_NODE) {
@@ -706,7 +710,7 @@ function createHTML(options = {}) {
                         offset = prev.childNodes.length;
                     }
                 } 
-                // If the node is at the end of a markdown tag, move it into the inner text node child if valid
+                // If the node is at the end of a span tag, move it into the inner text node child if valid
                 else if (offset >= spanTextLength && parentSpan.nextSibling) {
                     const next = parentSpan.nextSibling;
                     if (next.nodeType === Node.TEXT_NODE) {
@@ -796,9 +800,9 @@ function createHTML(options = {}) {
         let lastContent = '';
 
         /**
-         * Uses getSurroundingTextFromSelection to see if there's an '@' or '#' 
-         * near the caret with no whitespace in between. Also detects if the 
-         * cursor is inside a <span class="mention"> from a previous mention.
+         * Function for determining if the user is typing a mention.
+         * Uses getSurroundingTextFromSelection to see if there's an '@' or '#' ahead of the the caret. 
+         * Also detects if the cursor is inside a span with class starting with "mention" from a previous mention.
          */
         function checkForMention(mentionCharacter) {
             const selection = window.getSelection();
@@ -809,43 +813,20 @@ function createHTML(options = {}) {
             const range = selection.getRangeAt(0);
             const container = range.startContainer;
 
-            // 1) If the caret is within a SPAN that looks like a mention,
-            //    return that entire span's text content.
-            //    (Adjust logic as needed if your mention spans have different naming, etc.)
-            if (
-                container.nodeType === Node.ELEMENT_NODE &&
-                container.nodeName === 'SPAN' &&
-                container.className.startsWith('mention')
-            ) {
-                return container.textContent || '';
-            }
-
-            // Alternatively, if the caret is inside the text node child of a mention span
-            // (for instance, <span class="mention">some text node</span>),
-            // we can detect that by checking the parent node:
-            if (
-                container.nodeType === Node.TEXT_NODE &&
-                container.parentNode.nodeName === 'SPAN' &&
-                container.parentNode.className.startsWith('mention')
-            ) {
-                // If you want to treat cursor-inside-mention the same way, you can do:
-                return container.parentNode.textContent || '';
-            }
-
-            // 2) If not inside an existing mention, we do the normal mention check on a text node
+            // Ensure that we are in a text node
             if (container.nodeType !== Node.TEXT_NODE) {
                 return '';
             }
 
-            // Use your helper to get text before/after the cursor (with 'stop' characters)
+            // If the caret in within a valid mention span parent, return that content
+            if (isMention(container?.parentNode)) {
+                return container.textContent || '';
+            }
+
+      
+            // get text around selection
             const { textBeforeCursor, textAfterCursor } = getSurroundingTextFromSelection();
 
-            // NOTE: textBeforeCursor is built in reverse by the helper function,
-            // so we reverse it back to normal order:
-            const reversedBeforeCursor = textBeforeCursor.split('').reverse().join('');
-
-            // 3) Check if there's whitespace immediately after the cursor
-            //    (or if we're at the end of the node), as per your original logic
             if (textAfterCursor.length > 0) {
                 // If the first char after cursor is NOT whitespace, bail out
                 if (!/\\s/.test(textAfterCursor[0])) {
@@ -853,12 +834,9 @@ function createHTML(options = {}) {
                 }
             }
 
-            // 4) Scan left in reversedBeforeCursor to find the mentionCharacter
-            //    with no whitespace in between
-            let i = reversedBeforeCursor.length - 1;
+            let i = textBeforeCursor.length - 1;
             while (i >= 0) {
-                const c = reversedBeforeCursor[i];
-
+                const c = textBeforeCursor[i];
                 // If we hit whitespace first, no valid mention
                 if (/\\s/.test(c)) {
                     return '';
@@ -867,24 +845,32 @@ function createHTML(options = {}) {
                 // If we find our mention symbol, verify it's at a word boundary
                 if (c === mentionCharacter) {
                     // Check if it's start-of-string or preceded by whitespace
-                    if (i === 0 || /\\s/.test(reversedBeforeCursor[i - 1])) {
+                    if (i === 0 || /\\s/.test(textBeforeCursor[i - 1])) {
                         // Valid mention boundary found!
-                        return reversedBeforeCursor.slice(i);
+                        return textBeforeCursor.slice(i);
                     }
-                    // Otherwise it's "in the middle of a word"
+                    // Otherwise return, we're in the middle of a word, not a valid mention
                     return '';
                 }
 
                 i--;
             }
 
-            // If we never find a valid mention symbol, return ''
+            // If we never find a valid mention symbol, return
             return '';
         }
 
+        /**
+         * Inserts a mention into the editor.
+         * mentionType - The type of mention. This determines the applied class and character.
+         * mentionText - The text of the mention.
+         * mentionUrl - The URL of the mention. we tack this on as a data attribute and use it for the link construction when sending the message.
+         */
         function insertMention({ mentionType, mentionText, mentionUrl }) {
             let mentionClass = '';
             let mentionCharacter = '';
+            
+            // apply mention class and character
             if (mentionType === 'user') {
                 mentionClass = 'mention-user';
                 mentionCharacter = '@';
@@ -908,7 +894,7 @@ function createHTML(options = {}) {
 
             let mentionSpan = null;
 
-            // 1) Check if we are already inside an existing mention span
+            // Check if we are already inside an existing mention span
             if (
                 container.nodeType === Node.TEXT_NODE &&
                 container.parentNode.nodeType === Node.ELEMENT_NODE &&
@@ -925,38 +911,38 @@ function createHTML(options = {}) {
 
                 const textContent = container.textContent;
 
-                // 1) Find the last occurrence of mentionCharacter before the caret
+                // Find the last occurrence of mentionCharacter before the caret
                 const mentionStartIndex = textContent.lastIndexOf(mentionCharacter, offset - 1);
                 if (mentionStartIndex === -1) {
                     // No @ (or #) found behind the caret, so nothing to replace
                     return;
                 }
 
-                // 2) Extract the substring that we consider the "mention search"
+                // Extract the substring that we consider the "mention search"
                 const mentionSearchText = textContent.slice(mentionStartIndex, offset);
 
-                // 3) Split out the text around that mention
+                // Split out the text around that mention
                 const beforeMention = textContent.slice(0, mentionStartIndex);
                 const afterMention = textContent.slice(offset);
 
-                // 4) Create the <span> for our mention
+                // Create the <span> for our mention
                 mentionSpan = document.createElement('span');
                 mentionSpan.className = mentionClass;
                 mentionSpan.textContent = mentionText;
                 mentionSpan.dataset.mentionUrl = mentionUrl;
 
-                // 5) Insert the newly-created pieces into the DOM
+                // Insert the newly-created pieces into the DOM
                 const parentNode = container.parentNode;
 
-                // -- text before mention
+                // add back text before mention
                 if (beforeMention) {
                     parentNode.insertBefore(document.createTextNode(beforeMention), container);
                 }
 
-                // -- mention span
+                // add mention span
                 parentNode.insertBefore(mentionSpan, container);
 
-                // -- text after mention
+                // add back text after mention
                 if (afterMention) {
                     parentNode.insertBefore(document.createTextNode(afterMention), container);
                 }
@@ -965,11 +951,11 @@ function createHTML(options = {}) {
                 parentNode.removeChild(container);
             }
 
-            // Insert the space node (so there's a visible space after the mention)
+            // Insert a space node (a normal space is typically trimmed by the browser, so we use a visible space character)
             const spaceNode = document.createTextNode('\u00A0');
             mentionSpan.parentNode.insertBefore(spaceNode, mentionSpan.nextSibling);
 
-            // Place caret at the END of the space node
+            // Place caret at the end of the space node
             const newRange = document.createRange();
             newRange.setStart(spaceNode, spaceNode.textContent.length);
             newRange.collapse(true);
@@ -984,20 +970,10 @@ function createHTML(options = {}) {
             Actions.UPDATE_OFFSET_Y();
         }
 
-        /**
-         * Finds an ancestor element of node that is a <span> with a class name
-         * starting with "mention". Returns that ancestor if found, otherwise null.
-         */
-            function findMentionSpanAncestor(node) {
+        function findMentionParent(node) {
             while (node && node !== document.documentElement) {
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                if (
-                    node.tagName === 'SPAN' &&
-                    node.className &&
-                    node.className.trim().startsWith('mention')
-                ) {
+                if (isMention(node)) {
                     return node;
-                }
                 }
                 node = node.parentNode;
             }
@@ -1005,9 +981,8 @@ function createHTML(options = {}) {
             }
 
         /**
-         * Unwraps the ancestor span (with a class name starting "mention") if
-         * the current selection's entire range is inside that span.
-         * We preserve the original text node(s) and the selection range.
+         * Unwraps the parent mention span if the current selection's range is inside on input
+         * Preserve the original text node(s) and the selection range.
          */
         function cleanupMentionEdit() {
             const selection = window.getSelection();
@@ -1016,34 +991,33 @@ function createHTML(options = {}) {
             const range = selection.getRangeAt(0);
 
             // Remember start/end containers and offsets
-            const startNode   = range.startContainer;
+            const startNode = range.startContainer;
             const startOffset = range.startOffset;
-            const endNode     = range.endContainer;
-            const endOffset   = range.endOffset;
+            const endNode = range.endContainer;
+            const endOffset = range.endOffset;
 
-            // Find potential "mention" ancestor for both start and end
-            const mentionAncestorStart = findMentionSpanAncestor(startNode);
-            const mentionAncestorEnd   = findMentionSpanAncestor(endNode);
+            // Find potential "mention" parent for both start and end
+            const mentionParentStart = findMentionParent(startNode);
+            const mentionParentEnd = findMentionParent(endNode);
 
             // If both ends are inside the same mention span
-            if (mentionAncestorStart && mentionAncestorStart === mentionAncestorEnd) {
+            if (mentionParentStart && mentionParentStart === mentionParentEnd) {
                 const mentionSpan = mentionAncestorStart;
 
-                // --- Unwrap the mention span by moving its children (text nodes, etc.)
-                //     up into the span's parent.
+                // Unwrap the mention span by moving its children up into the span's parent.
                 const parent = mentionSpan.parentNode;
                 const nextSibling = mentionSpan.nextSibling;
                 
                 // Move all child nodes of <span> before the <span> itself
                 while (mentionSpan.firstChild) {
-                parent.insertBefore(mentionSpan.firstChild, nextSibling);
+                    parent.insertBefore(mentionSpan.firstChild, nextSibling);
                 }
 
-                // Finally, remove the empty <span>
+                // Remove empty span
                 parent.removeChild(mentionSpan);
 
-                // --- Restore the original selection using the same node references and offsets
-                selection.removeAllRanges();  // Clear existing selection
+                // Restore the original selection using the same node references and offsets
+                selection.removeAllRanges();
                 range.setStart(startNode, startOffset);
                 range.setEnd(endNode, endOffset);
                 selection.addRange(range);
@@ -1058,7 +1032,7 @@ function createHTML(options = {}) {
             const container = range.startContainer;
             const offset = range.startOffset;
 
-            // Create a text node with " @ " with visible space
+            // Create a text node with " @ " using visible space characters
             const atSymbolNode = document.createTextNode("\u00A0@\u00A0");
 
             // Insert the text node at the current selection
@@ -1067,7 +1041,7 @@ function createHTML(options = {}) {
             // Move the cursor right after the "@" character
             range.setStart(atSymbolNode, 2);
             range.collapse(true);
-            
+
             // Clear the current selection and set the new range
             selection.removeAllRanges();
             selection.addRange(range);
