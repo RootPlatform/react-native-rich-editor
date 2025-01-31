@@ -283,6 +283,8 @@ function createHTML(options = {}) {
         const MARKER_START = "@@----SELECTION-START-" + timestamp + "----@@";
         const MARKER_END = "@@----SELECTION-END-" + timestamp + "----@@";
 
+        const MENTION_PLACEHOLDER = "@@----MENTION" + timestamp + "----@@";
+
         /**
          * Inserts MARKER_START and MARKER_END at the selection boundaries in the editor content to track cursor position.
          * Note: Prior to insertion, we remove the active selection ranges, so the user won't potentially see a highlight of these tokens.
@@ -367,9 +369,6 @@ function createHTML(options = {}) {
             selection.addRange(range);
         }
 
-        /*
-        * Strip and flatten markup to start with clean text for markdown parsing
-        */
         function stripHTMLAndFlatten(element) {
             let changed = true;
             // Flatten until no changes are made
@@ -378,9 +377,6 @@ function createHTML(options = {}) {
             }
         }
 
-        /**
-         * Check if the element is a mention
-         */
         function isMention(element) {
             return element.tagName === 'SPAN' && element.className.startsWith('mention');
         }
@@ -418,48 +414,70 @@ function createHTML(options = {}) {
             return didChange;
         }
 
-        /**
-        * Apply markdown syntax to the editor content
-        */ 
         function applyMarkdownSyntax(syntax) {
             return '<span class="markdown-tag">' + syntax + '</span>'
         }
 
-        /**
-         *  Invalidate match solely on selection markers.
-         */
         function isMatchOnSelectionMarkers(text) {
             return text === MARKER_START + MARKER_END;
         }
+        const mentionRegex = /<span class="mention[^>]*>.*?<\\/span>/g;
+        function extractMentionSpans(html) {
+            const mentionPlaceholders = [];
+            const updatedHtml = html.replace(mentionRegex, match => {
+                mentionPlaceholders.push(match);
+                return MENTION_PLACEHOLDER;
+            });
+            return { updatedHtml, mentionPlaceholders };
+        }
+
+        function restoreMentionSpans(html, mentionPlaceholders) {
+            let currentIndex = 0;
+            return html.replace(new RegExp(MENTION_PLACEHOLDER, 'g'), () => {
+                return mentionPlaceholders[currentIndex++];
+            });
+        }
+        
         /**
         * String parsing function to add markdown elements to the editor content
         */ 
         const MARKDOWN_SYNTAX_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g;
         function addMarkdownElements(element) {
-            return element.innerHTML.replace(
-                MARKDOWN_SYNTAX_REGEX,
-                function(match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent) {
-                    if (boldItalic && biContent && !isMatchOnSelectionMarkers(biContent)) {
-                        return applyMarkdownSyntax(boldItalic) +
-                                '<b><i>' + biContent + '</i></b>' +
-                                applyMarkdownSyntax(boldItalic);
-                    } else if (bold && bContent && !isMatchOnSelectionMarkers(bContent)) {
-                     console.log('bold', bold, bContent);
-                        return applyMarkdownSyntax(bold) +
-                                '<b>' + bContent + '</b>' +
-                                applyMarkdownSyntax(bold);
-                    } else if (italic && iContent && !isMatchOnSelectionMarkers(iContent)) {
-                        return applyMarkdownSyntax(italic) +
-                                '<i>' + iContent + '</i>' +
-                                applyMarkdownSyntax(italic);
-                    } else if (strike && sContent && !isMatchOnSelectionMarkers(sContent)) {
-                        return applyMarkdownSyntax(strike) +
-                                '<s>' + sContent + '</s>' +
-                                applyMarkdownSyntax(strike);
-                    }
-                    return match;
+            // 1) Grab the entire HTML
+            let html = element.innerHTML;
+
+            // 2) Extract mention spans into placeholders
+            const { updatedHtml, mentionPlaceholders } = extractMentionSpans(html);
+            html = updatedHtml;
+
+            // 3) Do the Markdown replacement on the stripped text
+            html = html.replace(MARKDOWN_SYNTAX_REGEX, function(
+                match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent
+            ) {
+                if (boldItalic && biContent && !isMatchOnSelectionMarkers(biContent)) {
+                return applyMarkdownSyntax(boldItalic) +
+                    '<b><i>' + biContent + '</i></b>' +
+                    applyMarkdownSyntax(boldItalic);
+                } else if (bold && bContent && !isMatchOnSelectionMarkers(bContent)) {
+                return applyMarkdownSyntax(bold) +
+                    '<b>' + bContent + '</b>' +
+                    applyMarkdownSyntax(bold);
+                } else if (italic && iContent && !isMatchOnSelectionMarkers(iContent)) {
+                return applyMarkdownSyntax(italic) +
+                    '<i>' + iContent + '</i>' +
+                    applyMarkdownSyntax(italic);
+                } else if (strike && sContent && !isMatchOnSelectionMarkers(sContent)) {
+                return applyMarkdownSyntax(strike) +
+                    '<s>' + sContent + '</s>' +
+                    applyMarkdownSyntax(strike);
                 }
-            );
+                return match;
+            });
+
+            // 4) Restore the mention spans
+            html = restoreMentionSpans(html, mentionPlaceholders);
+
+            return html;
         }
 
         /**
@@ -864,8 +882,7 @@ function createHTML(options = {}) {
             return '';
         }
 
-
-        function insertMention(mentionType, mentionText) {
+        function insertMention({ mentionType, mentionText, mentionUrl }) {
             let mentionClass = '';
             let mentionCharacter = '';
             if (mentionType === 'user') {
@@ -926,6 +943,7 @@ function createHTML(options = {}) {
                 mentionSpan = document.createElement('span');
                 mentionSpan.className = mentionClass;
                 mentionSpan.textContent = mentionText;
+                mentionSpan.dataset.mentionUrl = mentionUrl;
 
                 // 5) Insert the newly-created pieces into the DOM
                 const parentNode = container.parentNode;
@@ -1032,9 +1050,33 @@ function createHTML(options = {}) {
             }
         }
 
+        function insertMentionStarter() {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.startContainer;
+            const offset = range.startOffset;
+
+            // Create a text node with " @ " with visible space
+            const atSymbolNode = document.createTextNode("\u00A0@\u00A0");
+
+            // Insert the text node at the current selection
+            range.insertNode(atSymbolNode);
+
+            // Move the cursor right after the "@" character
+            range.setStart(atSymbolNode, 2);
+            range.collapse(true);
+            
+            // Clear the current selection and set the new range
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
-            insertMention: { result: function (mentionType, mentionText) { return insertMention(mentionType, mentionText) }},
+            insertMention: { result: function (mentionData) { return insertMention(mentionData) }},
+            insertMentionStarter: { result: function () { return insertMentionStarter() }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
             underline: { state: function() { return queryCommandState('underline'); }, result: function() { return exec('underline'); }},
             strikeThrough: { state: function() { return queryCommandState('strikeThrough'); }, result: function() { return exec('strikeThrough'); }},
