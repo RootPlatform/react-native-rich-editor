@@ -283,7 +283,7 @@ function createHTML(options = {}) {
         const MARKER_START = "@@----SELECTION-START-" + timestamp + "----@@";
         const MARKER_END = "@@----SELECTION-END-" + timestamp + "----@@";
 
-        const MENTION_PLACEHOLDER = "@@----MENTION" + timestamp + "----@@";
+        const MENTION_MARKER = "@@----MENTION" + timestamp + "----@@";
 
         /**
          * Inserts MARKER_START and MARKER_END at the selection boundaries in the editor content to track cursor position.
@@ -430,31 +430,27 @@ function createHTML(options = {}) {
             const mentionPlaceholders = [];
             const updatedHtml = html.replace(mentionRegex, match => {
                 mentionPlaceholders.push(match);
-                return MENTION_PLACEHOLDER;
+                return MENTION_MARKER;
             });
             return { updatedHtml, mentionPlaceholders };
         }
 
         function restoreMentionSpans(html, mentionPlaceholders) {
             let currentIndex = 0;
-            return html.replace(new RegExp(MENTION_PLACEHOLDER, 'g'), () => {
+            return html.replace(new RegExp(MENTION_MARKER, 'g'), () => {
                 return mentionPlaceholders[currentIndex++];
             });
         }
         
         /**
         * String parsing function to add markdown elements to the editor content
+        * We extract mention spans first, then apply markdown syntax to the stripped text
         */ 
         const MARKDOWN_SYNTAX_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g;
         function addMarkdownElements(element) {
-            // 1) Grab the entire HTML
             let html = element.innerHTML;
-
-            // 2) Extract mention spans into placeholders
             const { updatedHtml, mentionPlaceholders } = extractMentionSpans(html);
             html = updatedHtml;
-
-            // 3) Do the Markdown replacement on the stripped text
             html = html.replace(MARKDOWN_SYNTAX_REGEX, function(
                 match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent
             ) {
@@ -477,10 +473,7 @@ function createHTML(options = {}) {
                 }
                 return match;
             });
-
-            // 4) Restore the mention spans
             html = restoreMentionSpans(html, mentionPlaceholders);
-
             return html;
         }
 
@@ -978,8 +971,8 @@ function createHTML(options = {}) {
                 node = node.parentNode;
             }
             return null;
-            }
-
+        }
+            
         /**
          * Unwraps the parent mention span if the current selection's range is inside on input
          * Preserve the original text node(s) and the selection range.
@@ -1002,7 +995,7 @@ function createHTML(options = {}) {
 
             // If both ends are inside the same mention span
             if (mentionParentStart && mentionParentStart === mentionParentEnd) {
-                const mentionSpan = mentionAncestorStart;
+                const mentionSpan = mentionParentStart;
 
                 // Unwrap the mention span by moving its children up into the span's parent.
                 const parent = mentionSpan.parentNode;
@@ -1023,6 +1016,40 @@ function createHTML(options = {}) {
                 selection.addRange(range);
             }
         }
+
+        // function cleanupMentionEdit() {
+        //     const selection = window.getSelection();
+        //     if (!selection || selection.rangeCount === 0) return;
+        //     const range = selection.getRangeAt(0);
+        //     // Remember start/end containers and offsets
+        //     const startNode   = range.startContainer;
+        //     const startOffset = range.startOffset;
+        //     const endNode     = range.endContainer;
+        //     const endOffset   = range.endOffset;
+        //     // Find potential "mention" ancestor for both start and end
+        //     const mentionAncestorStart = findMentionParent(startNode);
+        //     const mentionAncestorEnd   = findMentionParent(endNode);
+        //     // If both ends are inside the same mention span
+        //     if (mentionAncestorStart && mentionAncestorStart === mentionAncestorEnd) {
+        //         const mentionSpan = mentionAncestorStart;
+        //         // --- Unwrap the mention span by moving its children (text nodes, etc.)
+        //         //     up into the span's parent.
+        //         const parent = mentionSpan.parentNode;
+        //         const nextSibling = mentionSpan.nextSibling;
+                
+        //         // Move all child nodes of <span> before the <span> itself
+        //         while (mentionSpan.firstChild) {
+        //         parent.insertBefore(mentionSpan.firstChild, nextSibling);
+        //         }
+        //         // Finally, remove the empty <span>
+        //         parent.removeChild(mentionSpan);
+        //         // --- Restore the original selection using the same node references and offsets
+        //         selection.removeAllRanges();  // Clear existing selection
+        //         range.setStart(startNode, startOffset);
+        //         range.setEnd(endNode, endOffset);
+        //         selection.addRange(range);
+        //     }
+        // }
 
         function insertMentionStarter() {
             const selection = window.getSelection();
