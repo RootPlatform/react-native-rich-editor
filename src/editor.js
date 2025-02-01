@@ -641,11 +641,17 @@ function createHTML(options = {}) {
             // Update the editor content
             tempDiv.innerHTML = updatedText;
 
+             // insert mention markers
+            const { updatedHtml, mentionPlaceholders } = insertMentionMarkers(tempDiv);
+
             // Parse string to add back markdown syntax
-            const parsed = addMarkdownElements(tempDiv);
+            const parsedHTML = addMarkdownElements(updatedHtml); 
+
+            // Restore mention spans
+            const finalHTML = restoreMentionSpans(parsedHTML, mentionPlaceholders);
 
             // Update the editor content
-            editorContent.innerHTML = parsed;
+            editorContent.innerHTML = finalHTML;
         
             // Determine marker locations in the new content
             const markerPositions = findMarkerTokensAndPlaceRanges(editorContent);
