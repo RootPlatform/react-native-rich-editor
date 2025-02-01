@@ -1032,14 +1032,14 @@ function createHTML(options = {}) {
             const container = range.startContainer;
             const offset = range.startOffset;
 
-            // Create a text node with " @ " using visible space characters
-            const atSymbolNode = document.createTextNode("\u00A0@\u00A0");
+            // Create a text node with "@"
+            const atSymbolNode = document.createTextNode("@");
 
             // Insert the text node at the current selection
             range.insertNode(atSymbolNode);
 
             // Move the cursor right after the "@" character
-            range.setStart(atSymbolNode, 2);
+            range.setStart(atSymbolNode, 1);
             range.collapse(true);
 
             // Clear the current selection and set the new range
