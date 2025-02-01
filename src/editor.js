@@ -425,10 +425,11 @@ function createHTML(options = {}) {
         function isMatchOnSelectionMarkers(text) {
             return text === MARKER_START + MARKER_END;
         }
+            
         const mentionRegex = /<span class="mention[^>]*>.*?<\\/span>/g;
-        function extractMentionSpans(html) {
+        function insertMentionMarkers(tempDiv) {
             const mentionPlaceholders = [];
-            const updatedHtml = html.replace(mentionRegex, match => {
+            const updatedHtml = tempDiv.innerHTML.replace(mentionRegex, match => {
                 mentionPlaceholders.push(match);
                 return MENTION_MARKER;
             });
@@ -444,14 +445,10 @@ function createHTML(options = {}) {
         
         /**
         * String parsing function to add markdown elements to the editor content
-        * We extract mention spans first, then apply markdown syntax to the stripped text
         */ 
         const MARKDOWN_SYNTAX_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g;
-        function addMarkdownElements(element) {
-            let html = element.innerHTML;
-            const { updatedHtml, mentionPlaceholders } = extractMentionSpans(html);
-            html = updatedHtml;
-            html = html.replace(MARKDOWN_SYNTAX_REGEX, function(
+        function addMarkdownElements(html) {
+            return html.replace(MARKDOWN_SYNTAX_REGEX, function(
                 match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent
             ) {
                 if (boldItalic && biContent && !isMatchOnSelectionMarkers(biContent)) {
@@ -473,8 +470,6 @@ function createHTML(options = {}) {
                 }
                 return match;
             });
-            html = restoreMentionSpans(html, mentionPlaceholders);
-            return html;
         }
 
         /**
@@ -493,11 +488,17 @@ function createHTML(options = {}) {
             // Flatten all elements leaving only allowed <div>, <br>, and text nodes
             stripHTMLAndFlatten(tempDiv);
 
+            // insert mention markers
+            const { updatedHtml, mentionPlaceholders } = insertMentionMarkers(tempDiv);
+
             // Apply markdown styling
-            const parsedHTML = addMarkdownElements(tempDiv); 
+            const parsedHTML = addMarkdownElements(updatedHtml); 
+
+            // Restore mention spans
+            const finalHTML = restoreMentionSpans(parsedHTML, mentionPlaceholders);
 
             // Replace editor content with parsed HTML
-            editorContent.innerHTML = parsedHTML;
+            editorContent.innerHTML = finalHTML;
 
             // Find the marker tokens in the updated content
             const markerPositions = findMarkerTokensAndPlaceRanges(editorContent);
@@ -972,7 +973,7 @@ function createHTML(options = {}) {
             }
             return null;
         }
-            
+
         /**
          * Unwraps the parent mention span if the current selection's range is inside on input
          * Preserve the original text node(s) and the selection range.
