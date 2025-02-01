@@ -1490,11 +1490,9 @@ function createHTML(options = {}) {
                 }
             };
             document.addEventListener('selectionchange', () => {
-                console.log('selection change')
                 // basic cursor data - determine if current range is in a bold or italic block
-                // this can be expanded on to include detection for mention and emoji actions
+                // and check for mention characters
                 const range = window.getSelection().getRangeAt(0);
-                console.log('range', range);
                 const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '' };
                 if (range) {
                     // update selection boundaries to ensure the cursor is in the right place
@@ -1513,11 +1511,8 @@ function createHTML(options = {}) {
                         cursorData.decorators.strikeThrough = true;
                     }
                     if (!isBold && !isItalic && !isStrikeThrough) {
-                        console.log('check for mention')
-
                         cursorData.channelMention = checkForMention('#');
                         cursorData.userMention = checkForMention('@');
-                        // detect if we want to do a mention or emoji action
                     }
                 }
   
