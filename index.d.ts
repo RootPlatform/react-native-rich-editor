@@ -232,7 +232,7 @@ export type IconRecord = {
 };
 export type SelectionChangeListener = (items: (string | {type: string; value: string})[]) => void;
 
-export type CursorContext =  {  type: 'cursor'; decorators: { bold: boolean; italic: boolean; strikeThrough: boolean } }
+export type CursorContext =  {  type: 'cursor'; decorators: { bold: boolean; italic: boolean; strikeThrough: boolean }; channelMention: string; userMention: string; };
 export type CursorContextListener = (items: CursorContext) => void;
 export declare class RichEditor extends React.Component<RichEditorProps> {
   // Public API
