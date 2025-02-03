@@ -588,18 +588,22 @@ function createHTML(options = {}) {
             // if no cursor in the document, return
             if (!selection.rangeCount) return;
 
-            const range = selection.getRangeAt(0);
-            const anchorNode = range.startContainer;
             let textBeforeCursor = "";
             let textAfterCursor = "";
-            console.log('anchorNode', anchorNode, anchorNode.nodeName, anchorNode===editorContent);
-           
+            const range = selection.getRangeAt(0);
+
+            // bail out of toggle if either the start or end of the selection is within a mention
+            if (range.startContainer && range.endContainer && (isMention(range.startContainer.parentNode) || isMention(range.endContainer.parentNode))) {
+                return;
+            }
+        
             // With a collapsed range, detect the text before and after the selection to see if the markdown syntax is already present
-            const surroundingText = getSurroundingTextFromSelection();
-            textBeforeCursor = surroundingText.textBeforeCursor;
-            textAfterCursor = surroundingText.textAfterCursor;
+            if (range.isCollapsed) {
+                const surroundingText = getSurroundingTextFromSelection();
+                textBeforeCursor = surroundingText.textBeforeCursor;
+                textAfterCursor = surroundingText.textAfterCursor;
+            }
             
-                
             // insert selection tokens to track the selection position through parsing.
             insertMarkerTokens();
 
@@ -635,7 +639,9 @@ function createHTML(options = {}) {
                 const textBeforeSyntax = tempDiv.innerHTML.slice(0, markerStartIndex - textBeforeCursor.length);
                 const innerText = tempDiv.innerHTML.slice(markerStartIndex - textBeforeCursor.length, markerEndIndex + MARKER_END.length + textAfterCursor.length)
                 const textAfterSyntax = tempDiv.innerHTML.slice(nextSyntaxStart);
+                console.log('add syntax', textBeforeSyntax, innerText, textAfterSyntax)
                 updatedText = textBeforeSyntax + markdownSyntax + innerText + markdownSyntax + textAfterSyntax;
+                console.log('updatedText', updatedText)
             }
 
             // Update the editor content
@@ -753,10 +759,10 @@ function createHTML(options = {}) {
             const oldEndContainer = range.endContainer;
             const oldEndOffset = range.endOffset;
 
-            // Adjust the START boundary
+            // Adjust the start boundary
             const start = adjustBoundary(range.startContainer, range.startOffset);
 
-            // Adjust the END boundary
+            // Adjust the end boundary
             const end = adjustBoundary(range.endContainer, range.endOffset);
 
 
@@ -974,16 +980,6 @@ function createHTML(options = {}) {
             Actions.UPDATE_OFFSET_Y();
         }
 
-        function findMentionParent(node) {
-            while (node && node !== document.documentElement) {
-                if (isMention(node)) {
-                    return node;
-                }
-                node = node.parentNode;
-            }
-            return null;
-        }
-
         /**
          * Unwraps the parent mention span if the current selection's range is inside on input
          * Preserve the original text node(s) and the selection range.
@@ -1001,11 +997,11 @@ function createHTML(options = {}) {
             const endOffset = range.endOffset;
 
             // Find mention span for both start and end
-            const mentionParentStart = findMentionParent(startNode);
-            const mentionParentEnd = findMentionParent(endNode);
+            const mentionParentStart = startNode.parentNode;
+            const mentionParentEnd = endNode.parentNode;
 
             // If both ends are inside the same mention span
-            if (mentionParentStart && mentionParentStart === mentionParentEnd) {
+            if (mentionParentStart && mentionParentEnd && isMention(mentionParentStart) && isMention(mentionParentEnd) && mentionParentStart === mentionParentEnd) {
                 const mentionSpan = mentionParentStart;
 
                 // Unwrap the mention span by moving its children up into the span's parent.
