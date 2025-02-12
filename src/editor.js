@@ -324,7 +324,7 @@ function createHTML(options = {}) {
         function findMarkerTokensAndPlaceRanges(element) {
             let startNode = null;
             let startOffset = null;
-            let endNode = null; 
+            let endNode = null;
             let endOffset = null;
 
             const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
@@ -363,7 +363,7 @@ function createHTML(options = {}) {
             range.setStart(startNode, startOffset);
             range.setEnd(endNode, endOffset);
 
-            // Remove active selection ranges    
+            // Remove active selection ranges
             selection.removeAllRanges();
             // Add the new range to selection
             selection.addRange(range);
@@ -385,7 +385,7 @@ function createHTML(options = {}) {
             return element.tagName === 'SPAN' && element.className === 'markdown-tag';
         }
 
-        /* 
+        /*
         * Single pass that flattens current markup.
         * Returns true if it flattened something, meaning we might need another pass.
         * Preserve div and br elements.
@@ -420,11 +420,11 @@ function createHTML(options = {}) {
 
         /**
         * Apply markdown syntax to the editor content
-        */ 
+        */
         function applyMarkdownSyntax(syntax) {
             return '<span class="markdown-tag">' + syntax + '</span>'
         }
-            
+
         /**
          *  Invalidate match solely on selection markers.
          */
@@ -448,10 +448,10 @@ function createHTML(options = {}) {
                 return mentionPlaceholders[currentIndex++];
             });
         }
-        
+
         /**
         * String parsing function to add markdown elements to the editor content
-        */ 
+        */
         const MARKDOWN_SYNTAX_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g;
         function addMarkdownElements(html) {
             return html.replace(MARKDOWN_SYNTAX_REGEX, function(
@@ -483,7 +483,7 @@ function createHTML(options = {}) {
         */
        function parseMarkdown() {
             const editorContent = editor.content;
-            
+
             // Insert marker tokens at the current selection
             insertMarkerTokens();
 
@@ -498,7 +498,7 @@ function createHTML(options = {}) {
             const { updatedHtml, mentionPlaceholders } = insertMentionMarkers(tempDiv);
 
             // Apply markdown styling
-            const parsedHTML = addMarkdownElements(updatedHtml); 
+            const parsedHTML = addMarkdownElements(updatedHtml);
 
             // Restore mention spans
             const finalHTML = restoreMentionSpans(parsedHTML, mentionPlaceholders);
@@ -565,7 +565,7 @@ function createHTML(options = {}) {
             strikeThrough: '~~',
             code: '\`'
         };
-        
+
         /**
          * Toggle markdown function for bold, italic, etc.
          * Inserts marker start and end around selection, then
@@ -596,14 +596,14 @@ function createHTML(options = {}) {
             if (range.startContainer && range.endContainer && (isMention(range.startContainer.parentNode) || isMention(range.endContainer.parentNode))) {
                 return;
             }
-        
+
             // With a collapsed range, detect the text before and after the selection to see if the markdown syntax is already present
             if (range.isCollapsed) {
                 const surroundingText = getSurroundingTextFromSelection();
                 textBeforeCursor = surroundingText.textBeforeCursor;
                 textAfterCursor = surroundingText.textAfterCursor;
             }
-            
+
             // insert selection tokens to track the selection position through parsing.
             insertMarkerTokens();
 
@@ -621,13 +621,13 @@ function createHTML(options = {}) {
             const previousSyntaxStart = markerStartIndex - markdownSyntax.length - textBeforeCursor.length;
 
             const nextSyntaxStart = markerEndIndex + MARKER_END.length + textAfterCursor.length;
-            const nextSyntaxEnd = nextSyntaxStart + markdownSyntax.length            
+            const nextSyntaxEnd = nextSyntaxStart + markdownSyntax.length
 
             // Determine if the text before and after the selection is the markdown syntax
             const isPreviousTextASyntaxMatch = tempDiv.innerHTML.slice(previousSyntaxStart, markerStartIndex - textBeforeCursor.length) === markdownSyntax;
             const isNextTextASyntaxMatch = tempDiv.innerHTML.slice(nextSyntaxStart, nextSyntaxEnd) === markdownSyntax;
 
-            let updatedText; 
+            let updatedText;
             if (isPreviousTextASyntaxMatch && isNextTextASyntaxMatch) {
                 // Remove the syntax
                 const textBeforeSyntax = tempDiv.innerHTML.slice(0, previousSyntaxStart);
@@ -651,19 +651,19 @@ function createHTML(options = {}) {
             const { updatedHtml, mentionPlaceholders } = insertMentionMarkers(tempDiv);
 
             // Parse string to add back markdown syntax
-            const parsedHTML = addMarkdownElements(updatedHtml); 
+            const parsedHTML = addMarkdownElements(updatedHtml);
 
             // Restore mention spans
             const finalHTML = restoreMentionSpans(parsedHTML, mentionPlaceholders);
 
             // Update the editor content
             editorContent.innerHTML = finalHTML;
-        
+
             // Determine marker locations in the new content
             const markerPositions = findMarkerTokensAndPlaceRanges(editorContent);
-        
+
             // Alert the component that the content has changed
-            const html = Actions.content.getHtml();   
+            const html = Actions.content.getHtml();
             postAction({ type: 'CONTENT_CHANGE', data: html });
 
             // Recalculate the height of the editor
@@ -690,7 +690,7 @@ function createHTML(options = {}) {
                 } else {
                     // fallback: place boundary at the end of the element
                     node = newPlacement;
-                    offset = newPlacement.childNodes.length; 
+                    offset = newPlacement.childNodes.length;
                 }
                 } else {
                     // fallback to the end of the editor
@@ -700,7 +700,7 @@ function createHTML(options = {}) {
             }
 
             // If boundary's parent is a markdown syntax span or a mention span
-            if (node.parentNode && 
+            if (node.parentNode &&
                 isMarkdownSyntax(node.parentNode) ||
                 isMention(node.parentNode)) {
 
@@ -721,7 +721,7 @@ function createHTML(options = {}) {
                         node = prev;
                         offset = prev.childNodes.length;
                     }
-                } 
+                }
                 // If the node is at the end of a span tag, move it into the inner text node child if valid
                 else if (offset >= spanTextLength && parentSpan.nextSibling) {
                     const next = parentSpan.nextSibling;
@@ -813,7 +813,7 @@ function createHTML(options = {}) {
 
         /**
          * Function for determining if the user is typing a mention.
-         * Uses getSurroundingTextFromSelection to see if there's an '@' or '#' ahead of the the cursor. 
+         * Uses getSurroundingTextFromSelection to see if there's an '@' or '#' ahead of the the cursor.
          * Also detects if the cursor is inside a span with class starting with "mention" from a previous mention.
          */
         function checkForMention(mentionCharacter) {
@@ -835,7 +835,7 @@ function createHTML(options = {}) {
                 return container.textContent || '';
             }
 
-      
+
             // get text around selection
             const { textBeforeCursor, textAfterCursor } = getSurroundingTextFromSelection();
 
@@ -881,7 +881,7 @@ function createHTML(options = {}) {
         function insertMention({ mentionType, mentionText, mentionUrl }) {
             let mentionClass = '';
             let mentionCharacter = '';
-            
+
             // apply mention class and character
             if (mentionType === 'user') {
                 mentionClass = 'mention-user';
@@ -973,7 +973,7 @@ function createHTML(options = {}) {
             selection.removeAllRanges();
             selection.addRange(newRange);
 
-            // Trigger your "content updated" logic
+            // Trigger content update logic
             const html = Actions.content.getHtml();
             postAction({ type: 'CONTENT_CHANGE', data: html });
             Actions.UPDATE_HEIGHT();
@@ -1007,7 +1007,7 @@ function createHTML(options = {}) {
                 // Unwrap the mention span by moving its children up into the span's parent.
                 const parent = mentionSpan.parentNode;
                 const nextSibling = mentionSpan.nextSibling;
-                
+
                 // Move all child nodes of <span> before the <span> itself
                 while (mentionSpan.firstChild) {
                     parent.insertBefore(mentionSpan.firstChild, nextSibling);
@@ -1351,7 +1351,7 @@ function createHTML(options = {}) {
             function handler() {
                 var activeTools = [];
                 for(var k in actionsHandler){
-                    const state =  Actions[k].state() 
+                    const state =  Actions[k].state()
                     if ( state ){
                         activeTools.push(typeof state === "boolean" ? k : {type: k, value: Actions[k].state()});
                     }
@@ -1497,7 +1497,7 @@ function createHTML(options = {}) {
                     const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
                     if (isBold) {
                         cursorData.decorators.bold = true;
-                    }       
+                    }
                     const isItalic = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.italic);
                     if (isItalic) {
                         cursorData.decorators.italic = true;
@@ -1511,7 +1511,7 @@ function createHTML(options = {}) {
                         cursorData.userMention = checkForMention('@');
                     }
                 }
-  
+
                 postAction({type: 'SELECTION_CHANGE', data: cursorData });
             });
             document.addEventListener("message", message , false);
