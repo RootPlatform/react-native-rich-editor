@@ -820,7 +820,8 @@ function createHTML(options = {}) {
          * Uses getSurroundingTextFromSelection to see if there's an '@' or '#' ahead of the the cursor.
          * Also detects if the cursor is inside a span with class starting with "mention" from a previous mention.
          */
-        function checkForMention(mentionCharacter) {
+        const validMentionSymbols = { '#': true, '@': true, ':': true };
+        function checkForInsertionMarkerAroundCursor() {
             const selection = window.getSelection();
             if (!selection || !selection.rangeCount) {
                 return '';
@@ -834,22 +835,21 @@ function createHTML(options = {}) {
                 return '';
             }
 
-            // If the cursor in within a valid mention span parent, return that content
+            // If the cursor is within a valid mention span parent, return that content
             if (isMention(container?.parentNode)) {
-                return container.textContent || '';
+                return {
+                    character: container.textContent[0],
+                    mention: container.textContent,
+                };
             }
 
-
-            // get text around selection
+            // Get text around selection
             const { textBeforeCursor, textAfterCursor } = getSurroundingTextFromSelection();
 
-            if (textAfterCursor.length > 0) {
-                // If the first char after cursor is NOT whitespace, bail out
-                if (!/\\s/.test(textAfterCursor[0])) {
-                    return '';
-                }
+            if (textAfterCursor.length > 0 && !/\\s/.test(textAfterCursor[0])) {
+                return '';
             }
-
+            const validMentionSymbols = { '#': true, '@': true, ':': true };
             let i = textBeforeCursor.length - 1;
             while (i >= 0) {
                 const char = textBeforeCursor[i];
@@ -858,12 +858,15 @@ function createHTML(options = {}) {
                     return '';
                 }
 
-                // If we find our mention symbol, verify it's at a word break
-                if (char === mentionCharacter) {
+                // Check for valid mention symbols
+                if (validMentionSymbols[char]) {
                     // Check if it's start of the string or preceded by whitespace
                     if (i === 0 || /\\s/.test(textBeforeCursor[i - 1])) {
                         // Valid mention found!
-                        return textBeforeCursor.slice(i);
+                        return {
+                            character: char,
+                            mention: textBeforeCursor.slice(i),
+                        };
                     }
                     // Otherwise return, we're in the middle of a word, not a valid mention
                     return '';
@@ -1060,7 +1063,7 @@ function createHTML(options = {}) {
             postContentUpdate();
         }
 
-        /**
+   /**
          * Inserts an emoji into the editor.
          * emoji - The emoji to insert.
          * replaceSearch - Whether to replace the search and marker with the emoji.
@@ -1080,38 +1083,44 @@ function createHTML(options = {}) {
             const offset = range.startOffset;
             let beforeEmoji = '';
             let afterEmoji = '';
-
             if (replaceSearch) {
-                const emojiData = findInsertionMarker(container, offset, ":");
-                if (!emojiData) return;
-                beforeEmoji = emojiData.beforeText;
-                afterEmoji = emojiData.afterText;
-            }
+              const emojiData = findInsertionMarker(container, offset, ":");
+              if (!emojiData) return;
 
-            const emojiNode = document.createTextNode(emoji);
-            const parentNode = container.parentNode;
+              // Use the matching property names:
+              beforeEmoji = emojiData.beforeMarker;
+              afterEmoji = emojiData.afterMarker;
 
-            // add back text before emoji
-            if (beforeEmoji) {
-                parentNode.insertBefore(document.createTextNode(beforeEmoji), container);
-            }
+              const emojiNode = document.createTextNode(emoji);
+              const parentNode = container.parentNode;
 
-            // add emoji node
-            parentNode.insertBefore(emojiNode, container);
+              // add back text before emoji
+              if (beforeEmoji) {
+                  parentNode.insertBefore(document.createTextNode(beforeEmoji), container);
+              }
 
-            // add back text after emoji
-            range.insertNode(emojiNode);
+              // add emoji node
+              parentNode.insertBefore(emojiNode, container);
 
-            // If we're replacing a marker, remove the original text node and add a space after the emoji node
-            if (replaceSearch) {
+                // add back text after emoji
+              if (afterEmoji) {
+                  parentNode.insertBefore(document.createTextNode(afterEmoji), emojiNode.nextSibling);
+              }
+
+
+             // If we're replacing a marker, remove the original text node and add a space after the emoji node
               parentNode.removeChild(container);
               const spaceNode = document.createTextNode('\u00A0');
               parentNode.insertBefore(spaceNode, emojiNode.nextSibling);
               range.setStart(spaceNode, 1);
               range.collapse(true);
+
             } else {
+              const emojiNode = document.createTextNode(emoji);
+
+              range.insertNode(emojiNode);
               // Move the cursor right after the shortcode
-              range.setStart(emojiNode, 2);
+              range.setStart(emojiNode, 1);
               range.collapse(true);
             }
 
@@ -1121,6 +1130,7 @@ function createHTML(options = {}) {
 
             postContentUpdate();
         }
+
 
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
@@ -1583,9 +1593,12 @@ function createHTML(options = {}) {
                         cursorData.decorators.strikeThrough = true;
                     }
                     if (!isBold && !isItalic && !isStrikeThrough) {
-                        cursorData.channelMention = checkForMention('#');
-                        cursorData.userMention = checkForMention('@');
-                        cursorData.emojiShortcodeMention = checkForMention(':');
+                        const insertionMarker = checkForInsert();
+                        if (insertionMarker) {
+                            cursorData.channelMention = insertionMarker.character === '#' ? insertionMarker.mention : '';
+                            cursorData.userMention = insertionMarker.character === '@' ? insertionMarker.mention : '';
+                            cursorData.emojiShortcodeMention = insertionMarker.character === ':' ? insertionMarker.mention : '';
+                        }
                     }
                 }
 
