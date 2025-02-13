@@ -275,6 +275,16 @@ function createHTML(options = {}) {
             }
         }
 
+        function postContentUpdate() {
+           // Alert the component that the content has changed
+            const html = Actions.content.getHtml();
+            postAction({ type: 'CONTENT_CHANGE', data: html });
+
+            // Recalculate the height of the editor
+            Actions.UPDATE_HEIGHT();
+            Actions.UPDATE_OFFSET_Y();
+        }
+
         /**
          * Unique markers for selection boundaries. These are used to track the cursor position through parsing.
          * These string based boundaries are useful for persisting heavy dom manipulations and string based updates.
@@ -662,13 +672,7 @@ function createHTML(options = {}) {
             // Determine marker locations in the new content
             const markerPositions = findMarkerTokensAndPlaceRanges(editorContent);
 
-            // Alert the component that the content has changed
-            const html = Actions.content.getHtml();
-            postAction({ type: 'CONTENT_CHANGE', data: html });
-
-            // Recalculate the height of the editor
-            Actions.UPDATE_HEIGHT();
-            Actions.UPDATE_OFFSET_Y();
+            postContentUpdate();
         }
 
         /**
@@ -872,6 +876,20 @@ function createHTML(options = {}) {
             return '';
         }
 
+
+        const findInsertionMarker = (container, offset, markerCharacter) => {
+            const textContent = container.textContent;
+            const markerStartIndex = textContent.lastIndexOf(markerCharacter, offset - 1);
+            if (markerStartIndex === -1) {
+                return null;
+            }
+            return {
+                markerSearchText: textContent.slice(markerStartIndex, offset),
+                beforeMarker: textContent.slice(0, markerStartIndex),
+                afterMarker: textContent.slice(offset)
+            };
+        };
+
         /**
          * Inserts a mention into the editor.
          * mentionType - The type of mention. This determines the applied class and character.
@@ -920,20 +938,11 @@ function createHTML(options = {}) {
                     return;
                 }
 
-                const textContent = container.textContent;
-
-                // Find the last occurrence of mentionCharacter before the cursor
-                const mentionStartIndex = textContent.lastIndexOf(mentionCharacter, offset - 1);
-                if (mentionStartIndex === -1) {
+                const insertionMarker = findInsertionMarker(container, offset, mentionCharacter);
+                if (!insertionMarker) {
                     return;
                 }
-
-                // Extract the existing mention search
-                const mentionSearchText = textContent.slice(mentionStartIndex, offset);
-
-                // Split out the text around that mention
-                const beforeMention = textContent.slice(0, mentionStartIndex);
-                const afterMention = textContent.slice(offset);
+                const { beforeText: beforeMention, afterText: afterMention } = insertionMarker;
 
                 // Create the span for our mention
                 mentionSpan = document.createElement('span');
@@ -973,11 +982,7 @@ function createHTML(options = {}) {
             selection.removeAllRanges();
             selection.addRange(newRange);
 
-            // Trigger content update logic
-            const html = Actions.content.getHtml();
-            postAction({ type: 'CONTENT_CHANGE', data: html });
-            Actions.UPDATE_HEIGHT();
-            Actions.UPDATE_OFFSET_Y();
+            postContentUpdate();
         }
 
         /**
@@ -1030,7 +1035,13 @@ function createHTML(options = {}) {
 
             const range = selection.getRangeAt(0);
             const container = range.startContainer;
+            // bail if we're in a mention
+            if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
+                return;
+            }
+
             const offset = range.startOffset;
+
 
             // Create a text node with "@"
             const atSymbolNode = document.createTextNode("@");
@@ -1045,12 +1056,77 @@ function createHTML(options = {}) {
             // Clear the current selection and set the new range
             selection.removeAllRanges();
             selection.addRange(range);
+
+            postContentUpdate();
+        }
+
+        /**
+         * Inserts an emoji into the editor.
+         * emoji - The emoji to insert.
+         * replaceSearch - Whether to replace the search and marker with the emoji.
+         */
+        function insertEmoji(emoji, replaceSearch = false) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.startContainer;
+
+            // bail if we're in a mention
+            if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
+                return;
+            }
+
+            const offset = range.startOffset;
+            let beforeEmoji = '';
+            let afterEmoji = '';
+
+            if (replaceSearch) {
+                const emojiData = findInsertionMarker(container, offset, ":");
+                if (!emojiData) return;
+                beforeEmoji = emojiData.beforeText;
+                afterEmoji = emojiData.afterText;
+            }
+
+            const emojiNode = document.createTextNode(emoji);
+            const parentNode = container.parentNode;
+
+            // add back text before emoji
+            if (beforeEmoji) {
+                parentNode.insertBefore(document.createTextNode(beforeEmoji), container);
+            }
+
+            // add emoji node
+            parentNode.insertBefore(emojiNode, container);
+
+            // add back text after emoji
+            range.insertNode(emojiNode);
+
+            // If we're replacing a marker, remove the original text node and add a space after the emoji node
+            if (replaceSearch) {
+              parentNode.removeChild(container);
+              const spaceNode = document.createTextNode('\u00A0');
+              parentNode.insertBefore(spaceNode, emojiNode.nextSibling);
+              range.setStart(spaceNode, 1);
+              range.collapse(true);
+            } else {
+              // Move the cursor right after the shortcode
+              range.setStart(emojiNode, 2);
+              range.collapse(true);
+            }
+
+            // Clear the current selection and set the new range
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+            postContentUpdate();
         }
 
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
             insertMention: { result: function (mentionData) { return insertMention(mentionData) }},
             insertMentionStarter: { result: function () { return insertMentionStarter() }},
+            insertEmoji: { result: function (shortcode, replaceMarker = false) { return insertEmoji(shortcode, replaceMarker) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
             underline: { state: function() { return queryCommandState('underline'); }, result: function() { return exec('underline'); }},
             strikeThrough: { state: function() { return queryCommandState('strikeThrough'); }, result: function() { return exec('strikeThrough'); }},
@@ -1489,7 +1565,7 @@ function createHTML(options = {}) {
                 // basic cursor data - determine if current range is in a bold or italic block
                 // and check for mention characters
                 const range = window.getSelection().getRangeAt(0);
-                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '' };
+                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '', emojiShortcodeMention: '' };
                 if (range) {
                     // update selection boundaries to ensure the cursor is in the right place
                     fixSelectionBoundaries();
@@ -1509,6 +1585,7 @@ function createHTML(options = {}) {
                     if (!isBold && !isItalic && !isStrikeThrough) {
                         cursorData.channelMention = checkForMention('#');
                         cursorData.userMention = checkForMention('@');
+                        cursorData.emojiShortcodeMention = checkForMention(':');
                     }
                 }
 
