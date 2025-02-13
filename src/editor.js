@@ -1063,7 +1063,7 @@ function createHTML(options = {}) {
             postContentUpdate();
         }
 
-   /**
+       /**
          * Inserts an emoji into the editor.
          * emoji - The emoji to insert.
          * replaceSearch - Whether to replace the search and marker with the emoji.
@@ -1113,16 +1113,14 @@ function createHTML(options = {}) {
               const spaceNode = document.createTextNode('\u00A0');
               parentNode.insertBefore(spaceNode, emojiNode.nextSibling);
               range.setStart(spaceNode, 1);
-              range.collapse(true);
-
             } else {
               const emojiNode = document.createTextNode(emoji);
-
               range.insertNode(emojiNode);
-              // Move the cursor right after the shortcode
-              range.setStart(emojiNode, 1);
-              range.collapse(true);
+              range.setStartAfter(emojiNode);
             }
+
+            range.collapse(true);
+
 
             // Clear the current selection and set the new range
             selection.removeAllRanges();
@@ -1130,7 +1128,6 @@ function createHTML(options = {}) {
 
             postContentUpdate();
         }
-
 
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
