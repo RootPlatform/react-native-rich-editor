@@ -1087,22 +1087,18 @@ function createHTML(options = {}) {
               const emojiData = findInsertionMarker(container, offset, ":");
               if (!emojiData) return;
 
-              // Use the matching property names:
               beforeEmoji = emojiData.beforeMarker;
               afterEmoji = emojiData.afterMarker;
 
               const emojiNode = document.createTextNode(emoji);
               const parentNode = container.parentNode;
 
-              // add back text before emoji
               if (beforeEmoji) {
                   parentNode.insertBefore(document.createTextNode(beforeEmoji), container);
               }
 
-              // add emoji node
               parentNode.insertBefore(emojiNode, container);
 
-                // add back text after emoji
               if (afterEmoji) {
                   parentNode.insertBefore(document.createTextNode(afterEmoji), emojiNode.nextSibling);
               }
@@ -1590,7 +1586,7 @@ function createHTML(options = {}) {
                         cursorData.decorators.strikeThrough = true;
                     }
                     if (!isBold && !isItalic && !isStrikeThrough) {
-                        const insertionMarker = checkForInsert();
+                        const insertionMarker = checkForInsertionMarkerAroundCursor();
                         if (insertionMarker) {
                             cursorData.channelMention = insertionMarker.character === '#' ? insertionMarker.mention : '';
                             cursorData.userMention = insertionMarker.character === '@' ? insertionMarker.mention : '';
