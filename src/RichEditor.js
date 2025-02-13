@@ -144,6 +144,8 @@ export default class RichTextEditor extends Component {
         // this.setEditorHeight(editorAvailableHeight);
     }*/
 
+   messageCopy = '';
+
   onMessage(event) {
     const that = this;
     const {onFocus, onBlur, onChange, onPaste, onKeyUp, onKeyDown, onInput, onMessage, onCursorPosition, onLink} = that.props;
@@ -191,6 +193,7 @@ export default class RichTextEditor extends Component {
         case messages.CONTENT_BLUR:
           that._focus = false;
           onBlur?.();
+          messageCopy = data;
           break;
         case messages.CONTENT_CHANGE:
           onChange?.(data);
@@ -246,6 +249,13 @@ export default class RichTextEditor extends Component {
     if (!this.unmount && this.webviewBridge) {
       this.webviewBridge.postMessage(jsonString);
     }
+  // if (!this._focus) {
+  //   this.getContentHtml().then(html => {
+  //     this.sendAction(actions.content, 'returnHtml', html);
+  //   }).catch(error => {
+  //     console.error('Error getting content HTML:', error);
+  //   });
+
   }
 
   componentDidUpdate(prevProps, prevState, snapshot) {

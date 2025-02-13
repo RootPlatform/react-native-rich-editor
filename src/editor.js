@@ -274,11 +274,9 @@ function createHTML(options = {}) {
                 selection.collapse(anchorNode, anchorOffset);
             }
         }
-
         function postContentUpdate() {
            // Alert the component that the content has changed
-            const html = Actions.content.getHtml();
-            postAction({ type: 'CONTENT_CHANGE', data: html });
+            Actions.POST_CONTENT_UPDATE();
 
             // Recalculate the height of the editor
             Actions.UPDATE_HEIGHT();
@@ -1386,6 +1384,11 @@ function createHTML(options = {}) {
                     }
                 }
             }
+
+            POST_CONTENT_UPDATE: function() {
+                const contentHtml = editor.content.innerHTML;
+                _postMessage({type: 'CONTENT_CHANGE', data: contentHtml });
+            },
         };
 
         var init = function init(settings) {
