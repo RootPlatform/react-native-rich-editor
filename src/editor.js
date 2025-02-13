@@ -1564,6 +1564,12 @@ function createHTML(options = {}) {
                     }
                 }
             };
+
+            const characterToFieldMap = {
+                '#': 'channelMention',
+                '@': 'userMention',
+                ':': 'emojiShortcodeMention'
+            }
             document.addEventListener('selectionchange', () => {
                 // basic cursor data - determine if current range is in a bold or italic block
                 // and check for mention characters
@@ -1588,9 +1594,7 @@ function createHTML(options = {}) {
                     if (!isBold && !isItalic && !isStrikeThrough) {
                         const insertionMarker = checkForInsertionMarkerAroundCursor();
                         if (insertionMarker) {
-                            cursorData.channelMention = insertionMarker.character === '#' ? insertionMarker.mention : '';
-                            cursorData.userMention = insertionMarker.character === '@' ? insertionMarker.mention : '';
-                            cursorData.emojiShortcodeMention = insertionMarker.character === ':' ? insertionMarker.mention : '';
+                            cursorData[characterToFieldMap[insertionMarker.character]] = insertionMarker.mention;
                         }
                     }
                 }
