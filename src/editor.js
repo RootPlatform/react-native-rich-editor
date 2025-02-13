@@ -1062,19 +1062,39 @@ function createHTML(options = {}) {
             postContentUpdate();
         }
 
-       /**
+        /**
          * Inserts an emoji into the editor.
-         * emoji - The emoji to insert.
-         * replaceSearch - Whether to replace the search and marker with the emoji.
-         */
-        function insertEmoji(emoji, replaceSearch = false) {
+        */
+        function insertEmoji(emoji) {
             const selection = window.getSelection();
             if (!selection.rangeCount) return;
 
             const range = selection.getRangeAt(0);
             const container = range.startContainer;
 
-            // bail if we're in a mention
+            if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
+                return;
+            }
+            const emojiNode = document.createTextNode(emoji);
+            range.insertNode(emojiNode);
+
+            range.setStartAfter(emojiNode);
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+            postContentUpdate();
+        }
+
+        /**
+         * Inserts an emoji into the editor and replaces the search and marker with the emoji.
+         */
+        function replaceSearchAndInsertEmoji(emoji) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.startContainer;
+
             if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
                 return;
             }
@@ -1082,53 +1102,45 @@ function createHTML(options = {}) {
             const offset = range.startOffset;
             let beforeEmoji = '';
             let afterEmoji = '';
-            if (replaceSearch) {
-              const emojiData = findInsertionMarker(container, offset, ":");
-              if (!emojiData) return;
 
-              beforeEmoji = emojiData.beforeMarker;
-              afterEmoji = emojiData.afterMarker;
+            const emojiData = findInsertionMarker(container, offset, ":");
+            if (!emojiData) return;
 
-              const emojiNode = document.createTextNode(emoji);
-              const parentNode = container.parentNode;
+            beforeEmoji = emojiData.beforeMarker;
+            afterEmoji = emojiData.afterMarker;
 
-              if (beforeEmoji) {
-                  parentNode.insertBefore(document.createTextNode(beforeEmoji), container);
-              }
+            const emojiNode = document.createTextNode(emoji);
+            const parentNode = container.parentNode;
 
-              parentNode.insertBefore(emojiNode, container);
-
-              if (afterEmoji) {
-                  parentNode.insertBefore(document.createTextNode(afterEmoji), emojiNode.nextSibling);
-              }
-
-
-             // If we're replacing a marker, remove the original text node and add a space after the emoji node
-              parentNode.removeChild(container);
-              const spaceNode = document.createTextNode('\u00A0');
-              parentNode.insertBefore(spaceNode, emojiNode.nextSibling);
-              range.setStart(spaceNode, 1);
-            } else {
-              const emojiNode = document.createTextNode(emoji);
-              range.insertNode(emojiNode);
-              range.setStartAfter(emojiNode);
+            if (beforeEmoji) {
+                parentNode.insertBefore(document.createTextNode(beforeEmoji), container);
             }
 
+            parentNode.insertBefore(emojiNode, container);
+
+            if (afterEmoji) {
+                parentNode.insertBefore(document.createTextNode(afterEmoji), emojiNode.nextSibling);
+            }
+
+            parentNode.removeChild(container);
+            const spaceNode = document.createTextNode('\u00A0');
+            parentNode.insertBefore(spaceNode, emojiNode.nextSibling);
+            range.setStart(spaceNode, 1);
             range.collapse(true);
 
 
-            // Clear the current selection and set the new range
             selection.removeAllRanges();
             selection.addRange(range);
-
             postContentUpdate();
         }
+
 
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
             insertMention: { result: function (mentionData) { return insertMention(mentionData) }},
             insertMentionStarter: { result: function () { return insertMentionStarter() }},
             insertEmoji: { result: function (shortcode, replaceMarker = false) { return insertEmoji(shortcode, replaceMarker) }},
+            replaceSearchAndInsertEmoji: { result: function (emoji) { return replaceSearchAndInsertEmoji(emoji) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
             underline: { state: function() { return queryCommandState('underline'); }, result: function() { return exec('underline'); }},
             strikeThrough: { state: function() { return queryCommandState('strikeThrough'); }, result: function() { return exec('strikeThrough'); }},
