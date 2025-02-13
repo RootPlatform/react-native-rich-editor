@@ -820,7 +820,7 @@ function createHTML(options = {}) {
          * Uses getSurroundingTextFromSelection to see if there's an '@' or '#' ahead of the the cursor.
          * Also detects if the cursor is inside a span with class starting with "mention" from a previous mention.
          */
-        const validMentionSymbols = { '#': true, '@': true, ':': true };
+        const validMarkerCharacters = { '#': true, '@': true, ':': true };
         function checkForInsertionMarkerAroundCursor() {
             const selection = window.getSelection();
             if (!selection || !selection.rangeCount) {
@@ -849,7 +849,6 @@ function createHTML(options = {}) {
             if (textAfterCursor.length > 0 && !/\\s/.test(textAfterCursor[0])) {
                 return '';
             }
-            const validMentionSymbols = { '#': true, '@': true, ':': true };
             let i = textBeforeCursor.length - 1;
             while (i >= 0) {
                 const char = textBeforeCursor[i];
@@ -858,8 +857,8 @@ function createHTML(options = {}) {
                     return '';
                 }
 
-                // Check for valid mention symbols
-                if (validMentionSymbols[char]) {
+                // Check for valid insertion marker symbols
+                if (validMarkerCharacters[char]) {
                     // Check if it's start of the string or preceded by whitespace
                     if (i === 0 || /\\s/.test(textBeforeCursor[i - 1])) {
                         // Valid mention found!
