@@ -1060,14 +1060,23 @@ function createHTML(options = {}) {
             postContentUpdate();
         }
 
+
+
         /**
          * Inserts an emoji into the editor.
         */
         function insertEmoji(emoji) {
             const selection = window.getSelection();
-            if (!selection.rangeCount) return;
+            let range;
+            if (!selection.rangeCount) {
+              range = document.createRange();
+              range.selectNodeContents(editor);
+              range.collapse(false);
 
-            const range = selection.getRangeAt(0);
+              selection.removeAllRanges();
+              selection.addRange(range);
+            }
+            range = selection.getRangeAt(0);
             const container = range.startContainer;
 
             if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
@@ -1606,7 +1615,7 @@ function createHTML(options = {}) {
                         cursorData.decorators.strikeThrough = true;
                     }
                     if (!isBold && !isItalic && !isStrikeThrough) {
-                        const insertionMarker = checkForInsertionMarkerAroundCursor();
+                        const insertionMarker = checkForInsertionMarker();
                         if (insertionMarker) {
                             cursorData[characterToFieldMap[insertionMarker.character]] = insertionMarker.mention;
                         }
