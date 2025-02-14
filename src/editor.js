@@ -1527,7 +1527,7 @@ function createHTML(options = {}) {
             function handleBlur (){
                 editorFoucs = false;
                 postAction({type: 'SELECTION_CHANGE', data: []});
-                postAction({type: 'CONTENT_BLUR', data: messageCopy });
+                postAction({type: 'CONTENT_BLUR'});
             }
             function handleClick(event){
                 var ele = event.target;
