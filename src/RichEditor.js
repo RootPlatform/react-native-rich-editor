@@ -144,17 +144,12 @@ export default class RichTextEditor extends Component {
         // this.setEditorHeight(editorAvailableHeight);
     }*/
 
-   messageCopy = '';
-
   onMessage(event) {
     const that = this;
     const {onFocus, onBlur, onChange, onPaste, onKeyUp, onKeyDown, onInput, onMessage, onCursorPosition, onLink} = that.props;
     try {
       const message = JSON.parse(event.nativeEvent.data);
       const data = message.data;
-
-      console.log('message', message);
-      console.log('data', data);
       switch (message.type) {
         case messages.CONTENT_HTML_RESPONSE:
           if (that.contentResolve) {
@@ -249,13 +244,6 @@ export default class RichTextEditor extends Component {
     if (!this.unmount && this.webviewBridge) {
       this.webviewBridge.postMessage(jsonString);
     }
-  // if (!this._focus) {
-  //   this.getContentHtml().then(html => {
-  //     this.sendAction(actions.content, 'returnHtml', html);
-  //   }).catch(error => {
-  //     console.error('Error getting content HTML:', error);
-  //   });
-
   }
 
   componentDidUpdate(prevProps, prevState, snapshot) {
