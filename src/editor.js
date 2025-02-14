@@ -1090,7 +1090,6 @@ function createHTML(options = {}) {
 
             postContentUpdate();
         }
-
         /**
          * Inserts an emoji into the editor and replaces the search and marker with the emoji.
          */
@@ -1372,6 +1371,12 @@ function createHTML(options = {}) {
                     _postMessage({type: 'OFFSET_HEIGHT', data: o_height = height});
                 }
             },
+
+            POST_CONTENT_UPDATE: function() {
+                const contentHtml = editor.content.innerHTML; // Get the content from the editable div
+                _postMessage({type: 'CONTENT_CHANGE', data: contentHtml }); // Post the content to the webview
+            },
+
             UPDATE_OFFSET_Y: function (){
                 if (!${useContainer}) return;
                 var node = anchorNode || window.getSelection().anchorNode;
@@ -1391,11 +1396,6 @@ function createHTML(options = {}) {
                     }
                 }
             }
-
-            POST_CONTENT_UPDATE: function() {
-                const contentHtml = editor.content.innerHTML;
-                _postMessage({type: 'CONTENT_CHANGE', data: contentHtml });
-            },
         };
 
         var init = function init(settings) {
@@ -1526,7 +1526,7 @@ function createHTML(options = {}) {
             function handleBlur (){
                 editorFoucs = false;
                 postAction({type: 'SELECTION_CHANGE', data: []});
-                postAction({type: 'CONTENT_BLUR'});
+                postAction({type: 'CONTENT_BLUR', data: messageCopy });
             }
             function handleClick(event){
                 var ele = event.target;
@@ -1609,7 +1609,9 @@ function createHTML(options = {}) {
                     if (!isBold && !isItalic && !isStrikeThrough) {
                         const insertionMarker = checkForInsertionMarker();
                         if (insertionMarker) {
-                            cursorData[characterToFieldMap[insertionMarker.character]] = insertionMarker.mention;
+                            cursorData.channelMention = insertionMarker.character === '#' ? insertionMarker.mention : '';
+                            cursorData.userMention = insertionMarker.character === '@' ? insertionMarker.mention : '';
+                            cursorData.emojiShortcodeMention = insertionMarker.character === ':' ? insertionMarker.mention : '';
                         }
                     }
                 }
