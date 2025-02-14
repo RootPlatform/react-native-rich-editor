@@ -1035,7 +1035,7 @@ function createHTML(options = {}) {
 
             const range = selection.getRangeAt(0);
             const container = range.startContainer;
-            // bail if we're in a mention
+
             if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
                 return;
             }
@@ -1064,18 +1064,19 @@ function createHTML(options = {}) {
         /**
          * Inserts an emoji into the editor.
         */
+        let lastActiveRange;
         function insertEmoji(emoji) {
             const selection = window.getSelection();
-            let range;
-            if (!selection.rangeCount) {
+            let range = lastActiveRange ?? selection.getRangeAt(0);
+            if (!range) {
               range = document.createRange();
               range.selectNodeContents(editor);
-              range.collapse(true);
+              range.collapse(false);
 
               selection.removeAllRanges();
               selection.addRange(range);
             }
-            range = selection.getRangeAt(0);
+
             const container = range.startContainer;
 
             if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
@@ -1585,12 +1586,18 @@ function createHTML(options = {}) {
                     }
                 }
             };
+            const markerToFieldMap = {
+                '#': 'channelMention',
+                '@': 'userMention',
+                ':': 'emojiShortcodeMention'
+            };
             document.addEventListener('selectionchange', () => {
                 // basic cursor data - determine if current range is in a bold or italic block
                 // and check for mention characters
                 const range = window.getSelection().getRangeAt(0);
                 const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '', emojiShortcodeMention: '' };
                 if (range) {
+                    lastActiveRange = range;
                     // update selection boundaries to ensure the cursor is in the right place
                     fixSelectionBoundaries();
 
@@ -1607,11 +1614,9 @@ function createHTML(options = {}) {
                         cursorData.decorators.strikeThrough = true;
                     }
                     if (!isBold && !isItalic && !isStrikeThrough) {
-                        const insertionMarker = checkForInsertionMarker();
+                        const insertionMarker = checkForInsertionMarkerAroundCursor();
                         if (insertionMarker) {
-                            cursorData.channelMention = insertionMarker.character === '#' ? insertionMarker.mention : '';
-                            cursorData.userMention = insertionMarker.character === '@' ? insertionMarker.mention : '';
-                            cursorData.emojiShortcodeMention = insertionMarker.character === ':' ? insertionMarker.mention : '';
+                            cursorData[markerToFieldMap[insertionMarker.character]] = insertionMarker.mention;
                         }
                     }
                 }
