@@ -155,8 +155,6 @@ export interface RichEditorProps extends WebViewProps {
   styleWithCSS?: boolean;
 }
 
-export type SelectionChangeListener = (items: (string | {type: string; value: string})[]) => void;
-
 export enum actions {
   content = 'content',
   updateHeight = 'UPDATE_HEIGHT',
@@ -232,7 +230,13 @@ export type IconRecord = {
 };
 export type SelectionChangeListener = (items: (string | {type: string; value: string})[]) => void;
 
-export type CursorContext =  {  type: 'cursor'; decorators: { bold: boolean; italic: boolean; strikeThrough: boolean }; channelMention: string; userMention: string; };
+export type CursorContext =  {
+   type: 'cursor';
+   decorators: { bold: boolean; italic: boolean; strikeThrough: boolean };
+   channelMention: string;
+   userMention: string;
+   emojiShortcodeMention: string;
+};
 export type CursorContextListener = (items: CursorContext) => void;
 export declare class RichEditor extends React.Component<RichEditorProps> {
   // Public API

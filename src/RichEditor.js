@@ -188,6 +188,7 @@ export default class RichTextEditor extends Component {
         case messages.CONTENT_BLUR:
           that._focus = false;
           onBlur?.();
+          messageCopy = data;
           break;
         case messages.CONTENT_CHANGE:
           onChange?.(data);
