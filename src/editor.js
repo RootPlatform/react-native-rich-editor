@@ -1061,7 +1061,6 @@ function createHTML(options = {}) {
         }
 
 
-
         /**
          * Inserts an emoji into the editor.
         */
@@ -1071,7 +1070,7 @@ function createHTML(options = {}) {
             if (!selection.rangeCount) {
               range = document.createRange();
               range.selectNodeContents(editor);
-              range.collapse(false);
+              range.collapse(true);
 
               selection.removeAllRanges();
               selection.addRange(range);
@@ -1146,7 +1145,7 @@ function createHTML(options = {}) {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
             insertMention: { result: function (mentionData) { return insertMention(mentionData) }},
             insertMentionStarter: { result: function () { return insertMentionStarter() }},
-            insertEmoji: { result: function (shortcode, replaceMarker = false) { return insertEmoji(shortcode, replaceMarker) }},
+            insertEmoji: { result: function (emoji) { return insertEmoji(emoji) }},
             replaceSearchAndInsertEmoji: { result: function (emoji) { return replaceSearchAndInsertEmoji(emoji) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
             underline: { state: function() { return queryCommandState('underline'); }, result: function() { return exec('underline'); }},
@@ -1373,7 +1372,6 @@ function createHTML(options = {}) {
                     _postMessage({type: 'OFFSET_HEIGHT', data: o_height = height});
                 }
             },
-
             UPDATE_OFFSET_Y: function (){
                 if (!${useContainer}) return;
                 var node = anchorNode || window.getSelection().anchorNode;
@@ -1587,12 +1585,6 @@ function createHTML(options = {}) {
                     }
                 }
             };
-
-            const characterToFieldMap = {
-                '#': 'channelMention',
-                '@': 'userMention',
-                ':': 'emojiShortcodeMention'
-            }
             document.addEventListener('selectionchange', () => {
                 // basic cursor data - determine if current range is in a bold or italic block
                 // and check for mention characters
