@@ -1141,12 +1141,49 @@ function createHTML(options = {}) {
         }
 
 
+        const MENTION_REGEX = /\\[\\s*([@#])([^\\]]+)\\]\\((root:\\/\\/(role|user|channel)\\/([A-Za-z0-9_\\-]+))\\)/g;
+        function parseMentions(content) {
+          return content.replace(
+            MENTION_REGEX,
+            (_match, symbol, mentionText, fullUrl, mentionType, mentionId) => {
+              const mentionClass = "mention-" + mentionType;
+
+              return '<span class="' + mentionClass + '" data-mention-url="' + fullUrl + '">' +
+                  symbol + mentionText +
+                '</span>'
+            }
+          );
+        }
+        function insertEdit(content) {
+          const selection = window.getSelection();
+          if (!selection || selection.rangeCount === 0) return;
+          const editorContent = editor.content;
+
+          const parsedContent = parseMentions(content);
+          editorContent.innerHTML = parsedContent;
+          const spaceNode = document.createTextNode('\u00A0');
+          editorContent.appendChild(spaceNode);
+
+          const newRange = document.createRange();
+          selection.removeAllRanges();
+
+          newRange.selectNodeContents(editorContent);
+          newRange.collapse();
+          selection.addRange(newRange);
+
+          parseMarkdown();
+
+          postContentUpdate();
+
+        }
+
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
             insertMention: { result: function (mentionData) { return insertMention(mentionData) }},
             insertMentionStarter: { result: function () { return insertMentionStarter() }},
             insertEmoji: { result: function (emoji) { return insertEmoji(emoji) }},
             replaceSearchAndInsertEmoji: { result: function (emoji) { return replaceSearchAndInsertEmoji(emoji) }},
+            insertEdit: { result: function (content) { return insertEdit(content) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
             underline: { state: function() { return queryCommandState('underline'); }, result: function() { return exec('underline'); }},
             strikeThrough: { state: function() { return queryCommandState('strikeThrough'); }, result: function() { return exec('strikeThrough'); }},
