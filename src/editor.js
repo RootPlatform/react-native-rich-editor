@@ -1154,13 +1154,18 @@ function createHTML(options = {}) {
             }
           );
         }
-        function insertEdit(content) {
+
+        /**
+         * Inserts a markdown content string into the editor, parsing mentions and supported markdown decorations.
+         */
+        function insertMarkdown(content) {
           const selection = window.getSelection();
           if (!selection || selection.rangeCount === 0) return;
           const editorContent = editor.content;
 
           const parsedContent = parseMentions(content);
           editorContent.innerHTML = parsedContent;
+
           const spaceNode = document.createTextNode('\u00A0');
           editorContent.appendChild(spaceNode);
 
@@ -1174,7 +1179,6 @@ function createHTML(options = {}) {
           parseMarkdown();
 
           postContentUpdate();
-
         }
 
         var Actions = {
@@ -1183,7 +1187,7 @@ function createHTML(options = {}) {
             insertMentionStarter: { result: function () { return insertMentionStarter() }},
             insertEmoji: { result: function (emoji) { return insertEmoji(emoji) }},
             replaceSearchAndInsertEmoji: { result: function (emoji) { return replaceSearchAndInsertEmoji(emoji) }},
-            insertEdit: { result: function (content) { return insertEdit(content) }},
+            insertMarkdown: { result: function (content) { return insertEdit(content) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
             underline: { state: function() { return queryCommandState('underline'); }, result: function() { return exec('underline'); }},
             strikeThrough: { state: function() { return queryCommandState('strikeThrough'); }, result: function() { return exec('strikeThrough'); }},
