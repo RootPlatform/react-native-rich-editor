@@ -1142,7 +1142,11 @@ function createHTML(options = {}) {
 
 
         const MENTION_REGEX = /\\[\\s*([@#])([^\\]]+)\\]\\((root:\\/\\/(role|user|channel)\\/([A-Za-z0-9_\\-]+))\\)/g;
-        function parseMentions(content) {
+
+        /**
+         * Parses mentions in a markdown content string and returns a string with mentions wrapped in span elements.
+         */
+        function parseMentionsFromMarkdown(content) {
           return content.replace(
             MENTION_REGEX,
             (_match, symbol, mentionText, fullUrl, mentionType, mentionId) => {
@@ -1163,7 +1167,7 @@ function createHTML(options = {}) {
           if (!selection || selection.rangeCount === 0) return;
           const editorContent = editor.content;
 
-          const parsedContent = parseMentions(content);
+          const parsedContent = parseMentionsFromMarkdown(content);
           editorContent.innerHTML = parsedContent;
 
           const spaceNode = document.createTextNode('\u00A0');
@@ -1187,7 +1191,7 @@ function createHTML(options = {}) {
             insertMentionStarter: { result: function () { return insertMentionStarter() }},
             insertEmoji: { result: function (emoji) { return insertEmoji(emoji) }},
             replaceSearchAndInsertEmoji: { result: function (emoji) { return replaceSearchAndInsertEmoji(emoji) }},
-            insertMarkdown: { result: function (content) { return insertEdit(content) }},
+            insertMarkdown: { result: function (content) { return insertMarkdown(content) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
             underline: { state: function() { return queryCommandState('underline'); }, result: function() { return exec('underline'); }},
             strikeThrough: { state: function() { return queryCommandState('strikeThrough'); }, result: function() { return exec('strikeThrough'); }},
