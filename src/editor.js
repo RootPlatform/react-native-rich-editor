@@ -489,7 +489,7 @@ function createHTML(options = {}) {
         /**
         * Parse the editor content and apply markdown syntax
         */
-       function parseMarkdown() {
+       function parseMarkdownTextDecorators() {
             const editorContent = editor.content;
 
             // Insert marker tokens at the current selection
@@ -1179,7 +1179,7 @@ function createHTML(options = {}) {
           newRange.collapse();
           selection.addRange(newRange);
 
-          parseMarkdown();
+          parseMarkdownTextDecorators();
 
           postContentUpdate();
         }
@@ -1476,7 +1476,7 @@ function createHTML(options = {}) {
                 settings.onChange();
                 if (content.innerHTML) {
                     cleanupMentionEdit();
-                    parseMarkdown();
+                    parseMarkdownTextDecorators();
                 }
                 lastContent = content.innerHTML;
                 ${inputListener} && postAction({type: "ON_INPUT", data: {inputType: _ref.inputType, data: _ref.data}});
