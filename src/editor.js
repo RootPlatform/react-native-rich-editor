@@ -1141,10 +1141,10 @@ function createHTML(options = {}) {
         }
 
 
-        const MENTION_MARKDOWN_REGEX = /\\[\\s*([@#])([^\\]]+)\\]\\((\\/\\/(role|user|channel)\\/([A-Za-z0-9_\\-]+))\\)/g;
         /**
          * Parses mentions in a markdown content string and returns a string with mentions wrapped in span elements.
          */
+        const MENTION_MARKDOWN_REGEX = /\\[\\s*([@#])([^\\]]+)\\]\\((\\/\\/(role|user|channel)\\/([A-Za-z0-9_\\-]+))\\)/g;
         function parseMentionsFromMarkdown(content) {
           return content.replace(
             MENTION_MARKDOWN_REGEX,
