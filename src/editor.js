@@ -1170,15 +1170,15 @@ function createHTML(options = {}) {
         function insertMarkdown(content) {
           const selection = window.getSelection();
           if (!selection || selection.rangeCount === 0) return;
-          editorContent.innerHTML = content;
+          editor.content.innerHTML = content;
 
           const spaceNode = document.createTextNode('\u00A0');
-          editorContent.appendChild(spaceNode);
+          editor.content.appendChild(spaceNode);
 
           const newRange = document.createRange();
           selection.removeAllRanges();
 
-          newRange.selectNodeContents(editorContent);
+          newRange.selectNodeContents(editor.content);
           newRange.collapse();
           selection.addRange(newRange);
 
