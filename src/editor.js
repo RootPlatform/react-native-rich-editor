@@ -1165,7 +1165,7 @@ function createHTML(options = {}) {
 
 
         /**
-         * Inserts a markdown content string into the editor, parsing mentions and supported markdown decorations.
+         * Inserts a markdown content string into the editor and parses it. The cursor is placed at the end of the content.
          */
         function insertMarkdown(content) {
           const selection = window.getSelection();
