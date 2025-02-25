@@ -462,7 +462,7 @@ function createHTML(options = {}) {
         */
         const TEXT_DECORATION_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g;
         function parseTextDecorationFromMarkdown(html) {
-            return html.replace(MARKDOWN_SYNTAX_REGEX, function(
+            return html.replace(TEXT_DECORATION_REGEX, function(
                 match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent
             ) {
                 if (boldItalic && biContent && !isMatchOnSelectionMarkers(biContent)) {
