@@ -460,8 +460,8 @@ function createHTML(options = {}) {
         /**
         * String parsing function to add markdown elements to the editor content
         */
-        const MARKDOWN_SYNTAX_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g;
-        function addMarkdownElements(html) {
+        const TEXT_DECORATION_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g;
+        function parseTextDecorationFromMarkdown(html) {
             return html.replace(MARKDOWN_SYNTAX_REGEX, function(
                 match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent
             ) {
@@ -487,9 +487,27 @@ function createHTML(options = {}) {
         }
 
         /**
+         * Parses mentions in a markdown content string and returns a string with mentions wrapped in span elements.
+        */
+        const MENTION_MARKDOWN_REGEX = /\\[\\s*([@#])([^\\]]+)\\]\\((\\/\\/(role|user|channel)\\/([A-Za-z0-9_\\-]+))\\)/g;
+        function parseMentionsFromMarkdown(tempDiv) {
+          return tempDiv.innerHTML.replace(
+            MENTION_MARKDOWN_REGEX,
+            (_match, symbol, mentionText, fullUrl, mentionType, mentionId) => {
+              const mentionClass = "mention-" + mentionType;
+
+              return '<span class="' + mentionClass + '" data-mention-url="' + fullUrl + '">' +
+                  symbol + mentionText +
+                '</span>'
+            }
+          );
+        }
+
+
+        /**
         * Parse the editor content and apply markdown syntax
         */
-       function parseMarkdownTextDecorators() {
+       function parseMarkdown() {
             const editorContent = editor.content;
 
             // Insert marker tokens at the current selection
@@ -502,11 +520,15 @@ function createHTML(options = {}) {
             // Flatten all elements leaving only allowed <div>, <br>, and text nodes
             stripHTMLAndFlatten(tempDiv);
 
+            // Parse mentions from markdown
+            const parsedMentions = parseMentionsFromMarkdown(tempDiv);
+            tempDiv.innerHTML = parsedMentions;
+
             // insert mention markers
             const { updatedHtml, mentionPlaceholders } = insertMentionMarkers(tempDiv);
 
             // Apply markdown styling
-            const parsedHTML = addMarkdownElements(updatedHtml);
+            const parsedHTML = parseTextDecorationFromMarkdown(updatedHtml);
 
             // Restore mention spans
             const finalHTML = restoreMentionSpans(parsedHTML, mentionPlaceholders);
@@ -659,7 +681,7 @@ function createHTML(options = {}) {
             const { updatedHtml, mentionPlaceholders } = insertMentionMarkers(tempDiv);
 
             // Parse string to add back markdown syntax
-            const parsedHTML = addMarkdownElements(updatedHtml);
+            const parsedHTML = parseTextDecorationFromMarkdown(updatedHtml);
 
             // Restore mention spans
             const finalHTML = restoreMentionSpans(parsedHTML, mentionPlaceholders);
@@ -1141,22 +1163,6 @@ function createHTML(options = {}) {
         }
 
 
-        /**
-         * Parses mentions in a markdown content string and returns a string with mentions wrapped in span elements.
-         */
-        const MENTION_MARKDOWN_REGEX = /\\[\\s*([@#])([^\\]]+)\\]\\((\\/\\/(role|user|channel)\\/([A-Za-z0-9_\\-]+))\\)/g;
-        function parseMentionsFromMarkdown(content) {
-          return content.replace(
-            MENTION_MARKDOWN_REGEX,
-            (_match, symbol, mentionText, fullUrl, mentionType, mentionId) => {
-              const mentionClass = "mention-" + mentionType;
-
-              return '<span class="' + mentionClass + '" data-mention-url="' + fullUrl + '">' +
-                  symbol + mentionText +
-                '</span>'
-            }
-          );
-        }
 
         /**
          * Inserts a markdown content string into the editor, parsing mentions and supported markdown decorations.
@@ -1164,10 +1170,7 @@ function createHTML(options = {}) {
         function insertMarkdown(content) {
           const selection = window.getSelection();
           if (!selection || selection.rangeCount === 0) return;
-          const editorContent = editor.content;
-
-          const parsedContent = parseMentionsFromMarkdown(content);
-          editorContent.innerHTML = parsedContent;
+          editorContent.innerHTML = content;
 
           const spaceNode = document.createTextNode('\u00A0');
           editorContent.appendChild(spaceNode);
@@ -1179,7 +1182,7 @@ function createHTML(options = {}) {
           newRange.collapse();
           selection.addRange(newRange);
 
-          parseMarkdownTextDecorators();
+          parseMarkdown();
 
           postContentUpdate();
         }
@@ -1476,7 +1479,7 @@ function createHTML(options = {}) {
                 settings.onChange();
                 if (content.innerHTML) {
                     cleanupMentionEdit();
-                    parseMarkdownTextDecorators();
+                    parseMarkdown();
                 }
                 lastContent = content.innerHTML;
                 ${inputListener} && postAction({type: "ON_INPUT", data: {inputType: _ref.inputType, data: _ref.data}});
