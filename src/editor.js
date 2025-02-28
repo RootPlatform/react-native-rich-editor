@@ -74,6 +74,7 @@ function createHTML(options = {}) {
     var __DEV__ = !!${window.__DEV__};
     var _ = (function (exports) {
         var anchorNode, focusNode, anchorOffset, focusOffset, _focusCollapse = false, cNode;
+        var lastActiveRange;
         var _log = console.log;
         var placeholderColor = '${placeholderColor}';
         var _randomID = 99;
@@ -213,7 +214,10 @@ function createHTML(options = {}) {
             try {
                 var selection = window.getSelection();
                 if (anchorNode){
-                    if (anchorNode !== selection.anchorNode && !selection.containsNode(anchorNode)){
+                    if (lastActiveRange) {
+                        selection.removeAllRanges();
+                        selection.addRange(lastActiveRange);
+                    } else if (anchorNode !== selection.anchorNode && !selection.containsNode(anchorNode)){
                         _focusCollapse = true;
                         selection.collapse(anchorNode, anchorOffset);
                     }
@@ -1086,7 +1090,6 @@ function createHTML(options = {}) {
         /**
          * Inserts an emoji into the editor.
         */
-        let lastActiveRange;
         function insertEmoji(emoji) {
             const selection = window.getSelection();
             let range = lastActiveRange ?? selection.getRangeAt(0);
@@ -1577,8 +1580,8 @@ function createHTML(options = {}) {
                 var range = document.createRange();
                 range.setStart(anchorNode, anchorOffset);
                 range.setEnd(anchorNode, anchorOffset);
-                selection.removeAllRanges();
-                selection.addRange(range);
+                lastActiveRange = range;
+
                 postAction({type: 'SELECTION_CHANGE', data: []});
                 postAction({type: 'CONTENT_BLUR' });
             }
