@@ -84,7 +84,7 @@ function createHTML(options = {}) {
         var body = document.body, docEle = document.documentElement;
         var defaultParagraphSeparatorString = 'defaultParagraphSeparator';
         var formatBlock = 'formatBlock';
-        var editor = null, editorFoucs = false, o_height = 0, compositionStatus = 0, paragraphStatus = 0, enterStatus = 0;
+        var editor = null, editorFocus = false, o_height = 0, compositionStatus = 0, paragraphStatus = 0, enterStatus = 0;
         function addEventListener(parent, type, listener) {
             return parent.addEventListener(type, listener);
         };
@@ -1565,14 +1565,20 @@ function createHTML(options = {}) {
                 ${keyDownListener} && postKeyAction(event, "CONTENT_KEYDOWN");
             }
             function handleFocus (){
-                editorFoucs = true;
+                editorFocus = true;
                 setTimeout(function (){
                     Actions.UPDATE_OFFSET_Y();
                 });
                 postAction({type: 'CONTENT_FOCUSED'});
             }
             function handleBlur (){
-                editorFoucs = false;
+                editorFocus = false;
+                var selection = window.getSelection();
+                var range = document.createRange();
+                range.setStart(anchorNode, anchorOffset);
+                range.setEnd(anchorNode, anchorOffset);
+                selection.removeAllRanges();
+                selection.addRange(range);
                 postAction({type: 'SELECTION_CHANGE', data: []});
                 postAction({type: 'CONTENT_BLUR' });
             }
@@ -1644,10 +1650,10 @@ function createHTML(options = {}) {
                 const range = window.getSelection().getRangeAt(0);
                 const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '', emojiShortcodeMention: '' };
                 if (range) {
-                    lastActiveRange = range;
+
                     // update selection boundaries to ensure the cursor is in the right place
                     fixSelectionBoundaries();
-
+                    saveSelection();
                     const isBold = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.bold);
                     if (isBold) {
                         cursorData.decorators.bold = true;
