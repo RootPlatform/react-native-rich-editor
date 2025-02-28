@@ -213,11 +213,11 @@ function createHTML(options = {}) {
             editor.content.focus();
             try {
                 var selection = window.getSelection();
-                if (anchorNode){
-                    if (lastActiveRange) {
-                        selection.removeAllRanges();
-                        selection.addRange(lastActiveRange);
-                    } else if (anchorNode !== selection.anchorNode && !selection.containsNode(anchorNode)){
+                if (lastActiveRange){
+                    selection.removeAllRanges();
+                    selection.addRange(lastActiveRange);
+                } else if (anchorNode){
+                    if (anchorNode !== selection.anchorNode && !selection.containsNode(anchorNode)){
                         _focusCollapse = true;
                         selection.collapse(anchorNode, anchorOffset);
                     }
