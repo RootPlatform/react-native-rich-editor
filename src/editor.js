@@ -1579,7 +1579,7 @@ function createHTML(options = {}) {
                 var selection = window.getSelection();
                 var range = document.createRange();
                 range.setStart(anchorNode, anchorOffset);
-                range.setEnd(anchorNode, anchorOffset);
+                range.setEnd(focusNode, focusOffset);
                 lastActiveRange = range;
 
                 postAction({type: 'SELECTION_CHANGE', data: []});
