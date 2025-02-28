@@ -1471,19 +1471,16 @@ function createHTML(options = {}) {
                     } else {
                         paragraphStatus = 1;
                     }
-                } else if (content.innerHTML === '<br>' || content.innerHTML === '<div><br></div><br>' || (lastContent === '<div><br></div><div><br></div>' && content.innerHTML === '<div><br></div>')){
+                } else if (content.innerHTML === '<br>' || content.innerHTML === '<div><br></div><br>' || content.innerHTML === '<div><br></div>' || (lastContent === '<div><br></div><div><br></div>' && content.innerHTML === '<div><br></div>')){
                     content.innerHTML = '';
                 } else if (enterStatus && queryCommandValue(formatBlock) === 'blockquote') {
                     formatParagraph();
                 }
-
                 saveSelection();
                 handleChange(_ref);
                 settings.onChange();
-                if (content.innerHTML) {
-                    cleanupMentionEdit();
-                    parseMarkdown();
-                }
+                cleanupMentionEdit();
+                parseMarkdown();
                 lastContent = content.innerHTML;
                 ${inputListener} && postAction({type: "ON_INPUT", data: {inputType: _ref.inputType, data: _ref.data}});
             };
