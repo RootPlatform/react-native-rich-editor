@@ -213,10 +213,7 @@ function createHTML(options = {}) {
             editor.content.focus();
             try {
                 var selection = window.getSelection();
-                if (lastActiveRange){
-                    selection.removeAllRanges();
-                    selection.addRange(lastActiveRange);
-                } else if (anchorNode){
+                if (anchorNode){
                     if (anchorNode !== selection.anchorNode && !selection.containsNode(anchorNode)){
                         _focusCollapse = true;
                         selection.collapse(anchorNode, anchorOffset);
@@ -1569,6 +1566,13 @@ function createHTML(options = {}) {
                 setTimeout(function (){
                     Actions.UPDATE_OFFSET_Y();
                 });
+
+                if (lastActiveRange){
+                    var selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(lastActiveRange);
+                }
+
                 postAction({type: 'CONTENT_FOCUSED'});
             }
             function handleBlur (){
