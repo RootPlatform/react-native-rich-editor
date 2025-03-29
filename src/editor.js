@@ -1036,13 +1036,18 @@ function createHTML(options = {}) {
                 const parent = mentionSpan.parentNode;
                 const nextSibling = mentionSpan.nextSibling;
 
-                // Move all child nodes of <span> before the <span> itself
-                while (mentionSpan.firstChild) {
-                    parent.insertBefore(mentionSpan.firstChild, nextSibling);
-                }
+                // Move child nodes of <span> before the <span> itself
+                parent.insertBefore(mentionSpan.firstChild, nextSibling);
 
                 // Remove empty span
                 parent.removeChild(mentionSpan);
+
+                // Check if the previous sibling is a split mention from a newline insertion and move it up to the parent
+                const potentialMentionFragment = parent.previousSibling;
+                if (potentialMentionFragment && isMention(potentialMentionFragment)) {
+                    parent.parentNode?.insertBefore(potentialMentionFragment.firstChild, parent);
+                    parent.parentNode?.removeChild(potentialMentionFragment);
+                }
 
                 // Restore the original selection using the same node references and offsets
                 selection.removeAllRanges();
