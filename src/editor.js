@@ -441,6 +441,12 @@ function createHTML(options = {}) {
             return text === MARKER_START + MARKER_END;
         }
 
+        /**
+         * Invalidate match if the text contains a newline
+         */
+        function matchContainsNewline(text) {
+            return text.includes('<div>' || '<br>');
+        }
         const mentionRegex = /<span class="mention[^>]*>.*?<\\/span>/g;
         function insertMentionMarkers(tempDiv) {
             const mentionPlaceholders = [];
@@ -466,19 +472,19 @@ function createHTML(options = {}) {
             return html.replace(TEXT_DECORATION_REGEX, function(
                 match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent
             ) {
-                if (boldItalic && biContent && !isMatchOnSelectionMarkers(biContent)) {
+                if (boldItalic && biContent && !isMatchOnSelectionMarkers(biContent) && !matchContainsNewline(biContent)) {
                 return applyMarkdownSyntax(boldItalic) +
                     '<b><i>' + biContent + '</i></b>' +
                     applyMarkdownSyntax(boldItalic);
-                } else if (bold && bContent && !isMatchOnSelectionMarkers(bContent)) {
+                } else if (bold && bContent && !isMatchOnSelectionMarkers(bContent) && !matchContainsNewline(bContent)) {
                 return applyMarkdownSyntax(bold) +
                     '<b>' + bContent + '</b>' +
                     applyMarkdownSyntax(bold);
-                } else if (italic && iContent && !isMatchOnSelectionMarkers(iContent)) {
+                } else if (italic && iContent && !isMatchOnSelectionMarkers(iContent) && !matchContainsNewline(iContent)) {
                 return applyMarkdownSyntax(italic) +
                     '<i>' + iContent + '</i>' +
                     applyMarkdownSyntax(italic);
-                } else if (strike && sContent && !isMatchOnSelectionMarkers(sContent)) {
+                } else if (strike && sContent && !isMatchOnSelectionMarkers(sContent) && !matchContainsNewline(sContent)) {
                 return applyMarkdownSyntax(strike) +
                     '<s>' + sContent + '</s>' +
                     applyMarkdownSyntax(strike);
