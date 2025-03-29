@@ -1054,9 +1054,17 @@ function createHTML(options = {}) {
 
         function insertMentionStarter() {
             const selection = window.getSelection();
-            if (!selection.rangeCount) return;
 
-            const range = selection.getRangeAt(0);
+            let range = lastActiveRange ?? selection.getRangeAt(0);
+            if (!range) {
+              range = document.createRange();
+              range.selectNodeContents(editor);
+              range.collapse(false);
+
+              selection.removeAllRanges();
+              selection.addRange(range);
+            }
+
             const container = range.startContainer;
 
             if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
