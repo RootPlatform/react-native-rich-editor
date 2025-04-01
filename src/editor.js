@@ -1590,6 +1590,7 @@ function createHTML(options = {}) {
                     var selection = window.getSelection();
                     selection.removeAllRanges();
                     selection.addRange(lastActiveRange);
+                    lastActiveRange = null;
                 }
 
                 postAction({type: 'CONTENT_FOCUSED'});
