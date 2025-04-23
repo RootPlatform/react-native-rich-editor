@@ -971,7 +971,7 @@ function createHTML(options = {}) {
                 if (!insertionMarker) {
                     return;
                 }
-                const { beforeText: beforeMention, afterText: afterMention } = insertionMarker;
+                const { beforeMarker: beforeMention, afterMarker: afterMention } = insertionMarker;
 
                 // Create the span for our mention
                 mentionSpan = document.createElement('span');
