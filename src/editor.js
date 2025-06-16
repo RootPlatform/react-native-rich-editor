@@ -1065,7 +1065,6 @@ function createHTML(options = {}) {
 
         function insertMentionStarter() {
             const selection = window.getSelection();
-
             let range = lastActiveRange ?? selection.getRangeAt(0);
             if (!range) {
               range = document.createRange();
@@ -1125,11 +1124,7 @@ function createHTML(options = {}) {
             }
             const emojiNode = document.createTextNode(emoji);
             range.insertNode(emojiNode);
-
             range.setStartAfter(emojiNode);
-            selection.removeAllRanges();
-            selection.addRange(range);
-
             postContentUpdate();
         }
         /**
@@ -1175,9 +1170,6 @@ function createHTML(options = {}) {
             range.setStart(spaceNode, 1);
             range.collapse(true);
 
-
-            selection.removeAllRanges();
-            selection.addRange(range);
             postContentUpdate();
         }
 
@@ -1204,6 +1196,54 @@ function createHTML(options = {}) {
           parseMarkdown();
 
           postContentUpdate();
+        }
+
+        /**
+         * Checks if the given node is inside a markdown node.
+         */
+        function isInMarkdownNode(node) {
+          while (node && node !== content) {
+            if (isMarkdownSyntax(node)) {
+              return true;
+            }
+            node = node.parentNode;
+          }
+          return false;
+        }
+
+        const pairRegex = /(\\*{1,3}|_{1,3}|~{2})(?=\\S)([\\s\\S]*?\\S)\\1/g;
+        let prevPairCount = 0;
+        /**
+         * Counts the number of balanced markdown pairs in the content.
+         */
+        function countMarkdownPairs() {
+          const text = content.innerText;
+          // matchAll is ES2020; falls back to looping with exec if you need IE support
+          const matches = [...text.matchAll(pairRegex)];
+          return matches.length;
+        }
+
+        /**
+         * Checks if the editor should parse markdown based on the input type and data.
+         */
+        function shouldParseMarkdown(inputType, data) {
+          // typed a marker
+          if (inputType === 'insertText' && /[\\*_~]/.test(data)) return true;
+          // deleted content
+          if (inputType === 'deleteContentBackward' ||
+              inputType === 'deleteContentForward') {
+            return true;
+          }
+          // editing inside an already-parsed node
+          const sel = window.getSelection();
+          if (sel.rangeCount && isInMarkdownNode(sel.anchorNode)) return true;
+          // any change in the total number of balanced pairs
+          const currentCount = countMarkdownPairs();
+          if (currentCount !== prevPairCount) {
+            prevPairCount = currentCount;
+            return true;
+          }
+          return false;
         }
 
         var Actions = {
@@ -1471,7 +1511,7 @@ function createHTML(options = {}) {
             var content = settings.element.content = createElement('div');
             content.id = 'content';
             content.contentEditable = true;
-            content.spellcheck = false;
+            content.spellcheck = true;
             content.autofocus = ${initialFocus};
             content.enterKeyHint = '${enterKeyHint}';
             content.autocapitalize = '${autoCapitalize}';
@@ -1496,7 +1536,10 @@ function createHTML(options = {}) {
                 handleChange(_ref);
                 settings.onChange();
                 cleanupMentionEdit();
-                parseMarkdown();
+
+                if (shouldParseMarkdown(_ref.inputType, _ref.data)) {
+                    parseMarkdown();
+                }
                 lastContent = content.innerHTML;
                 ${inputListener} && postAction({type: "ON_INPUT", data: {inputType: _ref.inputType, data: _ref.data}});
             };
@@ -1520,7 +1563,7 @@ function createHTML(options = {}) {
                         activeTools.push(typeof state === "boolean" ? k : {type: k, value: Actions[k].state()});
                     }
                 }
-                postAction({type: 'SELECTION_CHANGE', data: activeTools});
+                // postAction({type: 'SELECTION_CHANGE', data: activeTools});
             };
 
             var _handleStateDT = null;
