@@ -43,6 +43,8 @@ function createHTML(options = {}) {
     styleWithCSS = false,
     useCharacter = true,
     defaultHttps = true,
+    clientCharacterLimit = 2500,
+    maxCharacterLimit = 10000,
   } = options;
   //ERROR: HTML height not 100%;
   return `
@@ -85,7 +87,7 @@ function createHTML(options = {}) {
         var body = document.body, docEle = document.documentElement;
         var defaultParagraphSeparatorString = 'defaultParagraphSeparator';
         var formatBlock = 'formatBlock';
-        var editor = null, editorFocus = false, o_height = 0, compositionStatus = 0, paragraphStatus = 0, enterStatus = 0;
+        var editor = null, editorFocus = false, o_height = 0, compositionStatus = 0, paragraphStatus = 0, enterStatus = 0, characterLimitReached = false, maxLimitReached = false;
         function addEventListener(parent, type, listener) {
             return parent.addEventListener(type, listener);
         };
@@ -1519,6 +1521,14 @@ function createHTML(options = {}) {
             content.autocomplete = 'off';
             content.className = "pell-content";
             content.oninput = function (_ref) {
+                const text = content.innerText || "";
+                if (text.length > ${clientCharacterLimit}) {
+                  characterLimitReached = true;
+                  postAction({type: "CLIENT_CHARACTER_LIMIT", data: {textLength: text.length, isLimitReached: true}});
+                } else if (text.length <= ${clientCharacterLimit} && characterLimitReached) {
+                  characterLimitReached = false;
+                  postAction({type: "CLIENT_CHARACTER_LIMIT", data: {textLength: text.length, isLimitReached: false}});
+                }
                 // var firstChild = _ref.target.firstChild;
                 if ((anchorNode === void 0 || anchorNode === content) && queryCommandValue(formatBlock) === ''){
                     if ( !compositionStatus || anchorNode === content){
@@ -1691,6 +1701,61 @@ function createHTML(options = {}) {
                     paragraphStatus && formatParagraph(true);
                 }
             })
+
+            content.addEventListener('beforeinput', (event) => {
+              // Get input type and composition status from event
+              const { inputType, isComposing } = event;
+              // Get current text content
+              const current = content.innerText || "";
+
+              // Allow certain input types to pass through without character limit checks:
+              // - Delete operations
+              // - Line breaks
+              // - Undo/redo operations
+              // - IME/composition inputs (emoji, CJK, autocomplete, etc.)
+              if (
+                inputType.startsWith('delete') ||
+                inputType === 'insertLineBreak' ||
+                inputType === 'historyUndo' ||
+                inputType === 'historyRedo' ||
+                isComposing ||
+                inputType === 'insertCompositionText' ||
+                inputType === 'insertFromComposition' ||
+                inputType === 'insertReplacementText'
+              ) {
+                return;
+              }
+
+              // Determine what text the user is trying to insert
+              let textToInsert = '';
+              // Handle paste operations differently than direct input
+              if (inputType === 'insertFromPaste') {
+                const clip = event.clipboardData || window.clipboardData;
+                textToInsert = clip?.getData('text') || '';
+              } else {
+                textToInsert = event.data || '';
+              }
+
+              // Calculate total text length after insertion
+              const intendedText = textToInsert.length + current.length;
+
+              // Handle character limit logic
+              if (!maxLimitReached && intendedText > ${maxCharacterLimit}) {
+                // First time exceeding limit - insert partial text up to limit
+                maxLimitReached = true;
+                event.preventDefault();
+                const chunk = textToInsert.slice(0, available);
+                exec('insertText', chunk);
+              } else if (intendedText > ${maxCharacterLimit}) {
+                // Already at limit - prevent any further insertion
+                event.preventDefault();
+                maxLimitReached = true;
+                return;
+              } else {
+                // Under limit - allow insertion
+                maxLimitReached = false;
+              }
+            });
 
             var message = function (event){
                 var msgData = JSON.parse(event.data), action = Actions[msgData.type];

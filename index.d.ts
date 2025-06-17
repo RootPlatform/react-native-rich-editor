@@ -153,6 +153,17 @@ export interface RichEditorProps extends WebViewProps {
    * Use style instead of dedicated tags
    */
   styleWithCSS?: boolean;
+
+  /**
+   * Character limit
+   */
+  characterLimit?: number;
+
+  /**
+   * Callback when the character limit is reached
+   */
+  onCharacterLimitReached?: (data: { textLength: number, isLimitReached: boolean }) => void;
+
 }
 
 export enum actions {
