@@ -1194,6 +1194,7 @@ function createHTML(options = {}) {
           const selection = window.getSelection();
           if (!selection || selection.rangeCount === 0) return;
           editor.content.innerHTML = content;
+          postAction({type: "LOG", data: { data: content }});
 
           const spaceNode = document.createTextNode('\u00A0');
           editor.content.appendChild(spaceNode);
@@ -1206,6 +1207,8 @@ function createHTML(options = {}) {
           selection.addRange(newRange);
 
           parseMarkdown();
+
+          postAction({type: "LOG", data: { data: editor.content.innerHTML }});
 
           postContentUpdate();
         }
@@ -1746,7 +1749,10 @@ function createHTML(options = {}) {
               const intendedText = textToInsert.length + current.length;
 
               // Handle character limit logic
+              postAction({type: "LOG", data: { data: intendedText, maxCharacterLimitReached: maxLimitReached}});
+
               if (!maxLimitReached && intendedText > ${maxCharacterLimit}) {
+                const available = ${maxCharacterLimit} - current.length;
                 // First time exceeding limit - insert partial text up to limit
                 maxLimitReached = true;
                 event.preventDefault();
