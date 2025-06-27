@@ -1749,8 +1749,6 @@ function createHTML(options = {}) {
               const intendedText = textToInsert.length + current.length;
 
               // Handle character limit logic
-              postAction({type: "LOG", data: { data: intendedText, maxCharacterLimitReached: maxLimitReached}});
-
               if (!maxLimitReached && intendedText > ${maxCharacterLimit}) {
                 const available = ${maxCharacterLimit} - current.length;
                 // First time exceeding limit - insert partial text up to limit
