@@ -1194,7 +1194,6 @@ function createHTML(options = {}) {
           const selection = window.getSelection();
           if (!selection || selection.rangeCount === 0) return;
           editor.content.innerHTML = content;
-          postAction({type: "LOG", data: { data: content }});
 
           const spaceNode = document.createTextNode('\u00A0');
           editor.content.appendChild(spaceNode);
@@ -1207,8 +1206,6 @@ function createHTML(options = {}) {
           selection.addRange(newRange);
 
           parseMarkdown();
-
-          postAction({type: "LOG", data: { data: editor.content.innerHTML }});
 
           postContentUpdate();
         }
