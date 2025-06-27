@@ -214,6 +214,7 @@ function createHTML(options = {}) {
         function focusCurrent(){
             editor.content.focus();
             try {
+                verifyCharacterLimit();
                 var selection = window.getSelection();
                 if (anchorNode){
                     if (anchorNode !== selection.anchorNode && !selection.containsNode(anchorNode)){
@@ -1175,7 +1176,16 @@ function createHTML(options = {}) {
             postContentUpdate();
         }
 
-
+        const verifyCharacterLimit = () => {
+            const text = content.innerText || "";
+            if (text.length > ${clientCharacterLimit}) {
+            characterLimitReached = true;
+            postAction({type: "CLIENT_CHARACTER_LIMIT", data: {textLength: text.length, isLimitReached: true}});
+          } else if (text.length <= ${clientCharacterLimit} && characterLimitReached) {
+            characterLimitReached = false;
+            postAction({type: "CLIENT_CHARACTER_LIMIT", data: {textLength: text.length, isLimitReached: false}});
+          }
+        }
 
         /**
          * Inserts a markdown content string into the editor and parses it. The cursor is placed at the end of the content.
@@ -1184,6 +1194,7 @@ function createHTML(options = {}) {
           const selection = window.getSelection();
           if (!selection || selection.rangeCount === 0) return;
           editor.content.innerHTML = content;
+          postAction({type: "LOG", data: { data: content }});
 
           const spaceNode = document.createTextNode('\u00A0');
           editor.content.appendChild(spaceNode);
@@ -1196,6 +1207,8 @@ function createHTML(options = {}) {
           selection.addRange(newRange);
 
           parseMarkdown();
+
+          postAction({type: "LOG", data: { data: editor.content.innerHTML }});
 
           postContentUpdate();
         }
@@ -1247,6 +1260,8 @@ function createHTML(options = {}) {
           }
           return false;
         }
+
+
 
         var Actions = {
             toggleMarkdown: { result: function (type) { return toggleMarkdown(type) }},
@@ -1521,14 +1536,8 @@ function createHTML(options = {}) {
             content.autocomplete = 'off';
             content.className = "pell-content";
             content.oninput = function (_ref) {
-                const text = content.innerText || "";
-                if (text.length > ${clientCharacterLimit}) {
-                  characterLimitReached = true;
-                  postAction({type: "CLIENT_CHARACTER_LIMIT", data: {textLength: text.length, isLimitReached: true}});
-                } else if (text.length <= ${clientCharacterLimit} && characterLimitReached) {
-                  characterLimitReached = false;
-                  postAction({type: "CLIENT_CHARACTER_LIMIT", data: {textLength: text.length, isLimitReached: false}});
-                }
+                verifyCharacterLimit();
+
                 // var firstChild = _ref.target.firstChild;
                 if ((anchorNode === void 0 || anchorNode === content) && queryCommandValue(formatBlock) === ''){
                     if ( !compositionStatus || anchorNode === content){
