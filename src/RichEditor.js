@@ -61,6 +61,7 @@ export default class RichTextEditor extends Component {
       styleWithCSS,
       useCharacter,
       defaultHttps,
+      characterLimit,
     } = props;
     that.state = {
       html: {
@@ -89,6 +90,7 @@ export default class RichTextEditor extends Component {
             styleWithCSS,
             useCharacter,
             defaultHttps,
+            characterLimit,
           }),
       },
       keyboardHeight: 0,
@@ -146,10 +148,11 @@ export default class RichTextEditor extends Component {
 
   onMessage(event) {
     const that = this;
-    const {onFocus, onBlur, onChange, onPaste, onKeyUp, onKeyDown, onInput, onMessage, onCursorPosition, onLink} = that.props;
+    const {onFocus, onBlur, onChange, onPaste, onKeyUp, onKeyDown, onInput, onMessage, onCursorPosition, onLink, onCharacterLimitReached} = that.props;
     try {
       const message = JSON.parse(event.nativeEvent.data);
       const data = message.data;
+      console.log('message', message);
       switch (message.type) {
         case messages.CONTENT_HTML_RESPONSE:
           if (that.contentResolve) {
@@ -211,6 +214,9 @@ export default class RichTextEditor extends Component {
         case messages.OFFSET_Y:
           let offsetY = Number.parseInt(Number.parseInt(data) + that.layout.y || 0);
           offsetY > 0 && onCursorPosition(offsetY);
+          break;
+        case messages.CLIENT_CHARACTER_LIMIT:
+          onCharacterLimitReached?.(data);
           break;
         default:
           onMessage?.(message);
