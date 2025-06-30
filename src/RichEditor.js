@@ -152,7 +152,6 @@ export default class RichTextEditor extends Component {
     try {
       const message = JSON.parse(event.nativeEvent.data);
       const data = message.data;
-      console.log('message', message);
       switch (message.type) {
         case messages.CONTENT_HTML_RESPONSE:
           if (that.contentResolve) {
