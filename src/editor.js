@@ -45,7 +45,6 @@ function createHTML(options = {}) {
     defaultHttps = true,
     clientCharacterLimit = 2500,
     maxCharacterLimit = 10000,
-    desiredLineHeightDip = 20,
   } = options;
   //ERROR: HTML height not 100%;
   return `
