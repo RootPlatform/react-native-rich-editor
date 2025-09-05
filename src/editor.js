@@ -52,16 +52,57 @@ function createHTML(options = {}) {
 <html>
 <head>
     <title>RN Rich Text Editor</title>
-    <meta name="viewport" content="user-scalable=1.0,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0">
+<meta name="viewport"
+  content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,interactive-widget=resizes-visual">
+
     <style>
         ${initialCSSText}
         * {outline: 0px solid transparent;-webkit-tap-highlight-color: rgba(0,0,0,0);-webkit-touch-callout: none;box-sizing: border-box;}
-        html, body { margin: 0; padding: 0;font-family: Arial, Helvetica, sans-serif; font-size:1em; height: 100%}
-        body { overflow-y: hidden; -webkit-overflow-scrolling: touch;background-color: ${backgroundColor};caret-color: ${caretColor};}
-        .content {font-family: Arial, Helvetica, sans-serif;color: ${color}; width: 100%;${
-    !useContainer ? 'height:100%;' : ''
-  }-webkit-overflow-scrolling: touch;padding-left: 0;padding-right: 0;}
-        .pell { height: 100%;} .pell-content { outline: 0; overflow-y: auto;padding: 10px;height: 100%;${contentCSSText}}
+        html, body {
+          margin: 0;
+          padding: 0;
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 1em;
+          height: 100%;
+          overflow: hidden; /* block window scroll */
+        }
+        body {
+          overflow-y: hidden;
+          -webkit-overflow-scrolling: touch;
+          background-color: ${backgroundColor};
+          caret-color: ${caretColor};
+        }
+        .content {
+          font-family: Arial, Helvetica, sans-serif;
+          color: ${color};
+          width: 100%;
+          ${!useContainer ? 'height:100%;' : ''}
+          -webkit-overflow-scrolling: touch;
+          padding-left: 0;
+          padding-right: 0;
+        }
+        .pell {
+          height: 100%;
+        }
+        .pell-content {
+          outline: 0;
+          overflow-y: auto;
+          padding: 10px;
+          height: 100%;
+          ${contentCSSText}
+        }
+        #editorHost {
+          position: fixed;
+          inset: 0;
+          overflow: hidden;
+          overscroll-behavior-y: contain;
+          -webkit-overflow-scrolling: touch;
+          /* height is set by JS to either 100dvh or 100vh (not both + padding) */
+        }
+        #editor {
+          min-height: 100%;
+          box-sizing: border-box;
+        }
     </style>
     <style>
         [placeholder]:empty:before { content: attr(placeholder); color: ${placeholderColor}; font-size: 16px;}
@@ -71,7 +112,10 @@ function createHTML(options = {}) {
     <style>${cssText}</style>
 </head>
 <body>
-<div class="content"><div id="editor" class="pell"/></div>
+<div id="editorHost">
+  <div class="content"><div id="editor" class="pell"/></div>
+</div>
+
 <script>
     var __DEV__ = !!${window.__DEV__};
     var _ = (function (exports) {
