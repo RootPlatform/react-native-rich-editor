@@ -1236,7 +1236,7 @@ function createHTML(options = {}) {
          */
         function insertMarkdown(content) {
           const selection = window.getSelection();
-          if (!selection || selection.rangeCount === 0) return;
+          if (!selection) return;
           editor.content.innerHTML = content;
 
           const spaceNode = document.createTextNode('\u00A0');
