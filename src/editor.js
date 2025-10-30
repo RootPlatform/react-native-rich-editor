@@ -1235,8 +1235,8 @@ function createHTML(options = {}) {
          * Inserts a markdown content string at the current caret position and parses it.
          * The rest of the editor content is preserved.
          */
-          function insertMarkdown(content) {
-            const selection = window.getSelection();
+        function insertMarkdown(content) {
+          const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
 
             const range = selection.getRangeAt(0);
@@ -1246,8 +1246,6 @@ function createHTML(options = {}) {
 
             range.deleteContents();
             range.insertNode(wrapper);
-
-            const spaceNode = document.createTextNode('\u00A0');
 
             const newRange = document.createRange();
             newRange.setStartAfter(wrapper);
@@ -1261,13 +1259,14 @@ function createHTML(options = {}) {
               while (wrapper.firstChild) {
                 parent.insertBefore(wrapper.firstChild, wrapper);
               }
+              const spaceNode = document.createTextNode('\u00A0');
               parent.insertBefore(spaceNode, wrapper.nextSibling);
               parent.removeChild(wrapper);
             }
 
             parseMarkdown();
             postContentUpdate();
-          }
+        }
 
         /**
          * Inserts edit message content string into the editor and parses it. The cursor is placed at the end of the content.
@@ -1291,7 +1290,6 @@ function createHTML(options = {}) {
 
           postContentUpdate();
         }
-
 
         /**
          * Checks if the given node is inside a markdown node.
@@ -1770,16 +1768,10 @@ function createHTML(options = {}) {
             addEventListener(content, 'focus', handleFocus);
             addEventListener(content, 'paste', function (e) {
                 e.preventDefault();
+                // get text representation of clipboard
+                var text = (e.originalEvent || e).clipboardData.getData('text/plain');
 
-                ${pasteListener} && postAction({type: 'CONTENT_PASTED'});
-
-                // if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-                //   window.ReactNativeWebView.postMessage(
-                //     JSON.stringify({
-                //       type: 'EDITOR_PASTE',
-                //     })
-                //   );
-                // }
+                ${pasteListener} && postAction({type: 'CONTENT_PASTED', data: text});
             });
             addEventListener(content, 'compositionstart', function(event){
                 if(${useCharacter}){
