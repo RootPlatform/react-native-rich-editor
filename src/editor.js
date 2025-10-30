@@ -1232,9 +1232,46 @@ function createHTML(options = {}) {
         }
 
         /**
-         * Inserts a markdown content string into the editor and parses it. The cursor is placed at the end of the content.
+         * Inserts a markdown content string at the current caret position and parses it.
+         * The rest of the editor content is preserved.
          */
         function insertMarkdown(content) {
+          const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+
+            const range = selection.getRangeAt(0);
+
+            const wrapper = document.createElement('span');
+            wrapper.appendChild(document.createTextNode(content));
+
+            range.deleteContents();
+            range.insertNode(wrapper);
+
+            const newRange = document.createRange();
+            newRange.setStartAfter(wrapper);
+            newRange.collapse(true);
+
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+
+            const parent = wrapper.parentNode;
+            if (parent) {
+              while (wrapper.firstChild) {
+                parent.insertBefore(wrapper.firstChild, wrapper);
+              }
+              const spaceNode = document.createTextNode('\u00A0');
+              parent.insertBefore(spaceNode, wrapper.nextSibling);
+              parent.removeChild(wrapper);
+            }
+
+            parseMarkdown();
+            postContentUpdate();
+        }
+
+        /**
+         * Inserts edit message content string into the editor and parses it. The cursor is placed at the end of the content.
+         */
+        function insertEdit(content) {
           const selection = window.getSelection();
           if (!selection) return;
           editor.content.innerHTML = content;
@@ -1311,6 +1348,7 @@ function createHTML(options = {}) {
             insertEmoji: { result: function (emoji) { return insertEmoji(emoji) }},
             replaceSearchAndInsertEmoji: { result: function (emoji) { return replaceSearchAndInsertEmoji(emoji) }},
             insertMarkdown: { result: function (content) { return insertMarkdown(content) }},
+            insertEdit: { result: function (content) { return insertEdit(content) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
             underline: { state: function() { return queryCommandState('underline'); }, result: function() { return exec('underline'); }},
             strikeThrough: { state: function() { return queryCommandState('strikeThrough'); }, result: function() { return exec('strikeThrough'); }},
@@ -1729,16 +1767,11 @@ function createHTML(options = {}) {
             addEventListener(content, 'blur', handleBlur);
             addEventListener(content, 'focus', handleFocus);
             addEventListener(content, 'paste', function (e) {
+                e.preventDefault();
                 // get text representation of clipboard
                 var text = (e.originalEvent || e).clipboardData.getData('text/plain');
 
                 ${pasteListener} && postAction({type: 'CONTENT_PASTED', data: text});
-                if (${pasteAsPlainText}) {
-                    // cancel paste
-                    e.preventDefault();
-                    // insert text manually
-                    exec("insertText", text);
-                }
             });
             addEventListener(content, 'compositionstart', function(event){
                 if(${useCharacter}){
