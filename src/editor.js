@@ -43,8 +43,8 @@ function createHTML(options = {}) {
     styleWithCSS = false,
     useCharacter = true,
     defaultHttps = true,
-    clientCharacterLimit = 2500,
-    maxCharacterLimit = 10000,
+    clientCharacterLimit = 10000,
+    maxCharacterLimit = 15000,
   } = options;
   //ERROR: HTML height not 100%;
   return `
