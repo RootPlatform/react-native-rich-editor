@@ -1613,8 +1613,6 @@ function createHTML(options = {}) {
             content.autocomplete = 'off';
             content.className = "pell-content";
             content.oninput = function (_ref) {
-              _postMessage({type: 'LOG_BEFORE_INPUT', data: { inputType: _ref.inputType, isComposing: compositionStatus, current: content.innerText }});
-
                 verifyCharacterLimit();
 
                 // var firstChild = _ref.target.firstChild;
@@ -1855,7 +1853,6 @@ function createHTML(options = {}) {
                 ':': 'emojiShortcodeMention'
             };
             document.addEventListener('selectionchange', () => {
-              _postMessage({type: 'LOG_SELECTION_CHANGE', data: { selection: window.getSelection(), content: content.innerHTML }});
                 // basic cursor data - determine if current range is in a bold or italic block
                 // and check for mention characters
                 const range = window.getSelection().getRangeAt(0);
