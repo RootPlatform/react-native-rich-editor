@@ -723,9 +723,7 @@ function createHTML(options = {}) {
                 const textBeforeSyntax = tempDiv.innerHTML.slice(0, markerStartIndex - textBeforeCursor.length);
                 const innerText = tempDiv.innerHTML.slice(markerStartIndex - textBeforeCursor.length, markerEndIndex + MARKER_END.length + textAfterCursor.length)
                 const textAfterSyntax = tempDiv.innerHTML.slice(nextSyntaxStart);
-                console.log('add syntax', textBeforeSyntax, innerText, textAfterSyntax)
                 updatedText = textBeforeSyntax + markdownSyntax + innerText + markdownSyntax + textAfterSyntax;
-                console.log('updatedText', updatedText)
             }
 
             // Update the editor content
@@ -1618,14 +1616,7 @@ function createHTML(options = {}) {
                 verifyCharacterLimit();
 
                 // var firstChild = _ref.target.firstChild;
-                if ((anchorNode === void 0 || anchorNode === content) && queryCommandValue(formatBlock) === ''){
-                    if ( !compositionStatus || anchorNode === content){
-                        formatParagraph(true);
-                        paragraphStatus = 0;
-                    } else {
-                        paragraphStatus = 1;
-                    }
-                } else if (content.innerHTML === '<br>' || content.innerHTML === '<div><br></div><br>' || content.innerHTML === '<div><br></div>' || (lastContent === '<div><br></div><div><br></div>' && content.innerHTML === '<div><br></div>')){
+                if (content.innerHTML === '<br>' || content.innerHTML === '<div><br></div><br>' || content.innerHTML === '<div><br></div>' || (lastContent === '<div><br></div><div><br></div>' && content.innerHTML === '<div><br></div>')){
                     content.innerHTML = '';
                 } else if (enterStatus && queryCommandValue(formatBlock) === 'blockquote') {
                     formatParagraph();
