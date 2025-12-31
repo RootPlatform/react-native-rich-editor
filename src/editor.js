@@ -1777,8 +1777,6 @@ function createHTML(options = {}) {
             })
 
             content.addEventListener('beforeinput', (event) => {
-              _postMessage({type: 'LOG_BEFORE_INPUT', data: { inputType: event.inputType, isComposing: event.isComposing, current: content.innerText }});
-
               // Get input type and composition status from event
               const { inputType, isComposing } = event;
               // Get current text content
