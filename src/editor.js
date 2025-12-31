@@ -723,9 +723,7 @@ function createHTML(options = {}) {
                 const textBeforeSyntax = tempDiv.innerHTML.slice(0, markerStartIndex - textBeforeCursor.length);
                 const innerText = tempDiv.innerHTML.slice(markerStartIndex - textBeforeCursor.length, markerEndIndex + MARKER_END.length + textAfterCursor.length)
                 const textAfterSyntax = tempDiv.innerHTML.slice(nextSyntaxStart);
-                console.log('add syntax', textBeforeSyntax, innerText, textAfterSyntax)
                 updatedText = textBeforeSyntax + markdownSyntax + innerText + markdownSyntax + textAfterSyntax;
-                console.log('updatedText', updatedText)
             }
 
             // Update the editor content
@@ -1615,17 +1613,12 @@ function createHTML(options = {}) {
             content.autocomplete = 'off';
             content.className = "pell-content";
             content.oninput = function (_ref) {
+              _postMessage({type: 'LOG_BEFORE_INPUT', data: { inputType: _ref.inputType, isComposing: compositionStatus, current: content.innerText }});
+
                 verifyCharacterLimit();
 
                 // var firstChild = _ref.target.firstChild;
-                if ((anchorNode === void 0 || anchorNode === content) && queryCommandValue(formatBlock) === ''){
-                    if ( !compositionStatus || anchorNode === content){
-                        formatParagraph(true);
-                        paragraphStatus = 0;
-                    } else {
-                        paragraphStatus = 1;
-                    }
-                } else if (content.innerHTML === '<br>' || content.innerHTML === '<div><br></div><br>' || content.innerHTML === '<div><br></div>' || (lastContent === '<div><br></div><div><br></div>' && content.innerHTML === '<div><br></div>')){
+                if (content.innerHTML === '<br>' || content.innerHTML === '<div><br></div><br>' || content.innerHTML === '<div><br></div>' || (lastContent === '<div><br></div><div><br></div>' && content.innerHTML === '<div><br></div>')){
                     content.innerHTML = '';
                 } else if (enterStatus && queryCommandValue(formatBlock) === 'blockquote') {
                     formatParagraph();
@@ -1786,6 +1779,8 @@ function createHTML(options = {}) {
             })
 
             content.addEventListener('beforeinput', (event) => {
+              _postMessage({type: 'LOG_BEFORE_INPUT', data: { inputType: event.inputType, isComposing: event.isComposing, current: content.innerText }});
+
               // Get input type and composition status from event
               const { inputType, isComposing } = event;
               // Get current text content
@@ -1860,6 +1855,7 @@ function createHTML(options = {}) {
                 ':': 'emojiShortcodeMention'
             };
             document.addEventListener('selectionchange', () => {
+              _postMessage({type: 'LOG_SELECTION_CHANGE', data: { selection: window.getSelection(), content: content.innerHTML }});
                 // basic cursor data - determine if current range is in a bold or italic block
                 // and check for mention characters
                 const range = window.getSelection().getRangeAt(0);
