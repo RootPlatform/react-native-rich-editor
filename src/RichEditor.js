@@ -378,8 +378,23 @@ export default class RichTextEditor extends Component {
   showAndroidKeyboard() {
     let that = this;
     if (Platform.OS === 'android') {
-      !that._keyOpen && that._input.focus();
-      that.webviewBridge?.requestFocus?.();
+      const attemptFocus = (retries = 3) => {
+        if (!that._keyOpen && that._input) {
+          that._input.focus();
+          that.webviewBridge?.requestFocus?.();
+          // Retry if keyboard didn't open and we have retries left
+          if (retries > 0) {
+            setTimeout(() => {
+              if (!that._keyOpen) {
+                attemptFocus(retries - 1);
+              }
+            }, 50);
+          }
+        } else {
+          that.webviewBridge?.requestFocus?.();
+        }
+      };
+      attemptFocus();
     }
   }
 
