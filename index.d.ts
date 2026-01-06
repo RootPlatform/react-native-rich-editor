@@ -88,6 +88,17 @@ export interface RichEditorProps extends WebViewProps {
   onPaste?: (data: string) => void;
 
   /**
+   * Callback when the user pastes an image
+   * @param {object} data image data including base64, mimeType, fileName, and fileSize
+   */
+  onPasteImage?: (data: {
+    base64: string;
+    mimeType: string;
+    fileName: string;
+    fileSize: number;
+  }) => void;
+
+  /**
    * Callback when the user keyup some content
    */
   onKeyUp?: ({keyCode: number, key: string}) => void;

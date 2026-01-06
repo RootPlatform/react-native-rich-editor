@@ -46,6 +46,7 @@ export default class RichTextEditor extends Component {
       html,
       pasteAsPlainText,
       onPaste,
+      onPasteImage,
       onKeyUp,
       onKeyDown,
       onInput,
@@ -77,6 +78,7 @@ export default class RichTextEditor extends Component {
             contentCSSText,
             pasteAsPlainText,
             pasteListener: !!onPaste,
+            pasteImageListener: !!onPasteImage,
             keyUpListener: !!onKeyUp,
             keyDownListener: !!onKeyDown,
             inputListener: !!onInput,
@@ -148,7 +150,7 @@ export default class RichTextEditor extends Component {
 
   onMessage(event) {
     const that = this;
-    const {onFocus, onBlur, onChange, onPaste, onKeyUp, onKeyDown, onInput, onMessage, onCursorPosition, onLink, onCharacterLimitReached} = that.props;
+    const {onFocus, onBlur, onChange, onPaste, onPasteImage, onKeyUp, onKeyDown, onInput, onMessage, onCursorPosition, onLink, onCharacterLimitReached} = that.props;
     try {
       const message = JSON.parse(event.nativeEvent.data);
       const data = message.data;
@@ -197,6 +199,9 @@ export default class RichTextEditor extends Component {
           break;
         case messages.CONTENT_PASTED:
           onPaste?.(data);
+          break;
+        case messages.IMAGE_PASTED:
+          onPasteImage?.(data);
           break;
         case messages.CONTENT_KEYUP:
           onKeyUp?.(data);
