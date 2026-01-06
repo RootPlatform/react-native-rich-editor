@@ -29,6 +29,7 @@ function createHTML(options = {}) {
     initialCSSText = '',
     pasteAsPlainText = false,
     pasteListener = false,
+    pasteImageListener = false,
     keyDownListener = false,
     keyUpListener = false,
     inputListener = false,
@@ -171,6 +172,16 @@ function createHTML(options = {}) {
         }
         function postAction(data){
             editor.content.contentEditable === 'true' && _postMessage(data);
+        };
+        // Expose postAction to window for native code to call (e.g., Android GBoard image paste)
+        // Use a wrapper that bypasses the contentEditable check for native calls like IMAGE_PASTED
+        window.postAction = function(data) {
+            if (data && data.type === 'IMAGE_PASTED') {
+                // Always post IMAGE_PASTED messages from native code
+                _postMessage(data);
+            } else {
+                postAction(data);
+            }
         };
 
         exports.isRN && (
@@ -1758,11 +1769,47 @@ function createHTML(options = {}) {
             addEventListener(content, 'blur', handleBlur);
             addEventListener(content, 'focus', handleFocus);
             addEventListener(content, 'paste', function (e) {
-                e.preventDefault();
-                // get text representation of clipboard
-                var text = (e.originalEvent || e).clipboardData.getData('text/plain');
+                var clipboardData = (e.originalEvent || e).clipboardData;
+                var items = clipboardData.items;
+                var hasImage = false;
 
-                ${pasteListener} && postAction({type: 'CONTENT_PASTED', data: text});
+                // Check for image data in clipboard
+                if (${pasteImageListener} && items) {
+                    for (var i = 0; i < items.length; i++) {
+                        var item = items[i];
+                        if (item.type.indexOf('image') !== -1) {
+                            hasImage = true;
+                            e.preventDefault();
+                            var blob = item.getAsFile();
+                            if (blob) {
+                                var reader = new FileReader();
+                                reader.onload = function(event) {
+                                    var base64Data = event.target.result;
+                                    var mimeType = blob.type || 'image/png';
+                                    var fileName = blob.name || ('pasted-image-' + Date.now() + '.' + mimeType.split('/')[1]);
+                                    postAction({
+                                        type: 'IMAGE_PASTED',
+                                        data: {
+                                            base64: base64Data,
+                                            mimeType: mimeType,
+                                            fileName: fileName,
+                                            fileSize: blob.size
+                                        }
+                                    });
+                                };
+                                reader.readAsDataURL(blob);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // Handle text paste if no image was found
+                if (!hasImage) {
+                    e.preventDefault();
+                    var text = clipboardData.getData('text/plain');
+                    ${pasteListener} && postAction({type: 'CONTENT_PASTED', data: text});
+                }
             });
             addEventListener(content, 'compositionstart', function(event){
                 if(${useCharacter}){
@@ -1778,7 +1825,7 @@ function createHTML(options = {}) {
 
             content.addEventListener('beforeinput', (event) => {
               // Get input type and composition status from event
-              const { inputType, isComposing } = event;
+              const { inputType, isComposing, dataTransfer } = event;
               // Get current text content
               const current = content.innerText || "";
 
@@ -1800,12 +1847,42 @@ function createHTML(options = {}) {
                 return;
               }
 
+              // Check for image paste from Android keyboard (GBoard) via dataTransfer
+              if (${pasteImageListener} && inputType === 'insertFromPaste' && dataTransfer) {
+                var files = dataTransfer.files;
+                if (files && files.length > 0) {
+                  for (var i = 0; i < files.length; i++) {
+                    var file = files[i];
+                    if (file.type.indexOf('image') !== -1) {
+                      event.preventDefault();
+                      var reader = new FileReader();
+                      reader.onload = function(e) {
+                        var base64Data = e.target.result;
+                        var mimeType = file.type || 'image/png';
+                        var fileName = file.name || ('pasted-image-' + Date.now() + '.' + mimeType.split('/')[1]);
+                        postAction({
+                          type: 'IMAGE_PASTED',
+                          data: {
+                            base64: base64Data,
+                            mimeType: mimeType,
+                            fileName: fileName,
+                            fileSize: file.size
+                          }
+                        });
+                      };
+                      reader.readAsDataURL(file);
+                      return;
+                    }
+                  }
+                }
+              }
+
               // Determine what text the user is trying to insert
               let textToInsert = '';
               // Handle paste operations differently than direct input
               if (inputType === 'insertFromPaste') {
-                const clip = event.clipboardData || window.clipboardData;
-                textToInsert = clip?.getData('text') || '';
+                const clip = event.clipboardData || window.clipboardData || dataTransfer;
+                textToInsert = clip?.getData('text') || clip?.getData('text/plain') || '';
               } else {
                 textToInsert = event.data || '';
               }
