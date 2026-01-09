@@ -352,6 +352,11 @@ export default class RichTextEditor extends Component {
   }
 
   setContentHTML(html) {
+    // When clearing content on iOS, also reset keyboard predictive state
+    if (PlatformIOS && !html) {
+      console.log('[RichEditor] setContentHTML clearing - calling clearKeyboardState');
+      this.clearKeyboardState();
+    }
     this.sendAction(actions.content, 'setHtml', html);
   }
 
@@ -472,6 +477,27 @@ export default class RichTextEditor extends Component {
 
   dismissKeyboard() {
     this._focus ? this.blurContentEditor() : Keyboard.dismiss();
+  }
+
+  /**
+   * Clears iOS keyboard predictive/autocomplete state.
+   * Call this when clearing editor content to reset keyboard suggestions.
+   * This is automatically called when setContentHTML is passed an empty string.
+   * @platform ios
+   */
+  clearKeyboardState() {
+    console.log('[RichEditor] clearKeyboardState called, PlatformIOS:', PlatformIOS, 'webviewBridge:', !!this.webviewBridge);
+    if (PlatformIOS && this.webviewBridge) {
+      console.log('[RichEditor] clearKeyboardState: webviewBridge keys:', Object.keys(this.webviewBridge));
+      console.log('[RichEditor] clearKeyboardState: webviewBridge.clearKeyboardState exists:', typeof this.webviewBridge.clearKeyboardState);
+      if (typeof this.webviewBridge.clearKeyboardState === 'function') {
+        console.log('[RichEditor] clearKeyboardState: CALLING clearKeyboardState NOW');
+        this.webviewBridge.clearKeyboardState();
+        console.log('[RichEditor] clearKeyboardState: DONE calling native method');
+      } else {
+        console.log('[RichEditor] clearKeyboardState: METHOD NOT FOUND on webviewBridge');
+      }
+    }
   }
 
   get isKeyboardOpen() {
