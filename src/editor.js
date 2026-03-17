@@ -10,6 +10,7 @@ function getContentCSS() {
         .x-todo li {list-style:none;}
         .x-todo-box {position: relative; left: -24px;}
         .x-todo-box input{position: absolute;}
+        .community-emoji{height: 1.4em;width: 1.4em;vertical-align: text-bottom;margin: 0 1px;object-fit: contain;display: inline;pointer-events: none;}
         blockquote{border-left: 6px solid #ddd;padding: 5px 0 5px 10px;margin: 15px 0 15px 15px;}
         hr{display: block;height: 0; border: 0;border-top: 1px solid #ccc; margin: 15px 0; padding: 0;}
         pre{padding: 10px 5px 10px 10px;margin: 15px 0;display: block;line-height: 18px;background: #F0F0F0;border-radius: 6px;font-size: 13px; font-family: 'monaco', 'Consolas', "Liberation Mono", Courier, monospace; word-break: break-all; word-wrap: break-word;overflow-x: auto;}
@@ -351,6 +352,7 @@ function createHTML(options = {}) {
         const MARKER_END = "@@----SELECTION-END-" + timestamp + "----@@";
 
         const MENTION_MARKER = "@@----MENTION" + timestamp + "----@@";
+        const EMOJI_MARKER = "@@----EMOJI" + timestamp + "----@@";
 
         /**
          * Inserts MARKER_START and MARKER_END at the selection boundaries in the editor content to track cursor position.
@@ -448,6 +450,10 @@ function createHTML(options = {}) {
             return element.tagName === 'SPAN' && element.className.startsWith('mention');
         }
 
+        function isCustomEmoji(element) {
+            return element.tagName === 'IMG' && element.className === 'community-emoji';
+        }
+
         function isMarkdownSyntax(element) {
             return element.tagName === 'SPAN' && element.className === 'markdown-tag';
         }
@@ -468,7 +474,7 @@ function createHTML(options = {}) {
                 if (child.nodeType === Node.ELEMENT_NODE) {
                 const tagName = child.nodeName.toUpperCase();
 
-                if (!ALLOWED_TAGS.includes(tagName) && !isMention(child)) {
+                if (!ALLOWED_TAGS.includes(tagName) && !isMention(child) && !isCustomEmoji(child)) {
                     // Flatten: move its children up, remove the node
                     didChange = true;
                     while (child.firstChild) {
@@ -519,6 +525,24 @@ function createHTML(options = {}) {
             let currentIndex = 0;
             return html.replace(new RegExp(MENTION_MARKER, 'g'), () => {
                 return mentionPlaceholders[currentIndex++];
+            });
+        }
+
+        /** Replaces custom emoji <img> tags with placeholder tokens to protect them from string-based markdown parsing. */
+        const emojiImgRegex = /<img\\s[^>]*class="community-emoji"[^>]*\\/?>/gi;
+        function insertEmojiMarkers(html) {
+            const emojiPlaceholders = [];
+            const updatedHtml = html.replace(emojiImgRegex, match => {
+                emojiPlaceholders.push(match);
+                return EMOJI_MARKER;
+            });
+            return { updatedHtml, emojiPlaceholders };
+        }
+
+        function restoreEmojiImgs(html, emojiPlaceholders) {
+            let currentIndex = 0;
+            return html.replace(new RegExp(EMOJI_MARKER, 'g'), () => {
+                return emojiPlaceholders[currentIndex++];
             });
         }
 
@@ -585,6 +609,10 @@ function createHTML(options = {}) {
             // Flatten all elements leaving only allowed <div>, <br>, and text nodes
             stripHTMLAndFlatten(tempDiv);
 
+            // Protect custom emoji img tags from all subsequent string-based operations
+            const { updatedHtml: htmlWithEmojiMarkers, emojiPlaceholders } = insertEmojiMarkers(tempDiv.innerHTML);
+            tempDiv.innerHTML = htmlWithEmojiMarkers;
+
             // Parse mentions from markdown
             const parsedMentions = parseMentionsFromMarkdown(tempDiv);
             tempDiv.innerHTML = parsedMentions;
@@ -595,8 +623,9 @@ function createHTML(options = {}) {
             // Apply markdown styling
             const parsedHTML = parseTextDecorationFromMarkdown(updatedHtml);
 
-            // Restore mention spans
-            const finalHTML = restoreMentionSpans(parsedHTML, mentionPlaceholders);
+            // Restore mention spans and emoji img tags
+            const restoredMentions = restoreMentionSpans(parsedHTML, mentionPlaceholders);
+            const finalHTML = restoreEmojiImgs(restoredMentions, emojiPlaceholders);
 
             // Replace editor content with parsed HTML
             editorContent.innerHTML = finalHTML;
@@ -1163,12 +1192,16 @@ function createHTML(options = {}) {
         */
         function insertEmoji(emoji) {
             const selection = window.getSelection();
-            let range = lastActiveRange ?? selection.getRangeAt(0);
+            let range;
+            try {
+              range = lastActiveRange ?? (selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
+            } catch(e) {
+              range = null;
+            }
             if (!range) {
               range = document.createRange();
-              range.selectNodeContents(editor);
+              range.selectNodeContents(editor.content);
               range.collapse(false);
-
               selection.removeAllRanges();
               selection.addRange(range);
             }
@@ -1181,8 +1214,119 @@ function createHTML(options = {}) {
             const emojiNode = document.createTextNode(emoji);
             range.insertNode(emojiNode);
             range.setStartAfter(emojiNode);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
             postContentUpdate();
         }
+        /**
+         * Creates a custom community emoji img element.
+         */
+        function createCustomEmojiImg(shortcode, emojiId, assetUri) {
+            const img = document.createElement('img');
+            img.src = assetUri;
+            img.className = 'community-emoji';
+            img.style.cssText = 'height: 20px; width: 20px; max-width: 20px; object-fit: contain; vertical-align: text-bottom;';
+            img.dataset.shortcode = shortcode;
+            img.dataset.emojiId = emojiId;
+            img.alt = shortcode;
+            img.contentEditable = 'false';
+            return img;
+        }
+
+        /**
+         * Inserts a custom community emoji image into the editor.
+         */
+        function insertCustomEmoji(jsonData) {
+            const { shortcode, emojiId, assetUri } = JSON.parse(jsonData);
+            const selection = window.getSelection();
+            let range;
+            try {
+              range = lastActiveRange ?? (selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
+            } catch(e) {
+              range = null;
+            }
+            if (!range) {
+              range = document.createRange();
+              range.selectNodeContents(editor.content);
+              range.collapse(false);
+              selection.removeAllRanges();
+              selection.addRange(range);
+            }
+
+            const container = range.startContainer;
+            if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
+                return;
+            }
+
+            const img = createCustomEmojiImg(shortcode, emojiId, assetUri);
+            range.insertNode(img);
+
+            // Place cursor after the img. Only add a zero-width space if there's no text node to anchor to.
+            var next = img.nextSibling;
+            if (next && next.nodeType === Node.TEXT_NODE) {
+              range.setStart(next, 0);
+            } else {
+              var spacer = document.createTextNode('\u200B');
+              img.parentNode.insertBefore(spacer, img.nextSibling);
+              range.setStart(spacer, 1);
+            }
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            postContentUpdate();
+        }
+
+        /**
+         * Inserts a custom community emoji and replaces the search marker with the emoji image.
+         */
+        function replaceSearchAndInsertCustomEmoji(jsonData) {
+            const { shortcode, emojiId, assetUri } = JSON.parse(jsonData);
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.startContainer;
+
+            if (container.nodeType === Node.TEXT_NODE && isMention(container.parentNode)) {
+                return;
+            }
+
+            const offset = range.startOffset;
+            const emojiData = findInsertionMarker(container, offset, ":");
+            if (!emojiData) return;
+
+            const beforeEmoji = emojiData.beforeMarker;
+            const afterEmoji = emojiData.afterMarker;
+            const img = createCustomEmojiImg(shortcode, emojiId, assetUri);
+            const parentNode = container.parentNode;
+
+            if (beforeEmoji) {
+                parentNode.insertBefore(document.createTextNode(beforeEmoji), container);
+            }
+
+            parentNode.insertBefore(img, container);
+
+            if (afterEmoji) {
+                parentNode.insertBefore(document.createTextNode(afterEmoji), img.nextSibling);
+            }
+
+            parentNode.removeChild(container);
+
+            // Only add a spacer if there's no text node after the img to anchor the cursor
+            var nextNode = img.nextSibling;
+            if (nextNode && nextNode.nodeType === Node.TEXT_NODE) {
+              range.setStart(nextNode, 0);
+            } else {
+              var spaceNode = document.createTextNode('\u200B');
+              parentNode.insertBefore(spaceNode, img.nextSibling);
+              range.setStart(spaceNode, 1);
+            }
+            range.collapse(true);
+
+            postContentUpdate();
+        }
+
         /**
          * Inserts an emoji into the editor and replaces the search and marker with the emoji.
          */
@@ -1355,7 +1499,9 @@ function createHTML(options = {}) {
             insertMention: { result: function (mentionData) { return insertMention(mentionData) }},
             insertMentionStarter: { result: function () { return insertMentionStarter() }},
             insertEmoji: { result: function (emoji) { return insertEmoji(emoji) }},
+            insertCustomEmoji: { result: function (jsonData) { return insertCustomEmoji(jsonData) }},
             replaceSearchAndInsertEmoji: { result: function (emoji) { return replaceSearchAndInsertEmoji(emoji) }},
+            replaceSearchAndInsertCustomEmoji: { result: function (jsonData) { return replaceSearchAndInsertCustomEmoji(jsonData) }},
             insertMarkdown: { result: function (content) { return insertMarkdown(content) }},
             insertEdit: { result: function (content) { return insertEdit(content) }},
             italic: { state: function() { return queryCommandState('italic'); }, result: function() { return exec('italic'); }},
@@ -1532,7 +1678,17 @@ function createHTML(options = {}) {
             },
             content: {
                 setDisable: function(dis){ this.blur(); editor.content.contentEditable = !dis},
-                setHtml: function(html) { editor.content.innerHTML = html; Actions.UPDATE_HEIGHT(); },
+                setHtml: function(html) {
+                    editor.content.innerHTML = html;
+                    // Invalidate stale selection state after content replacement
+                    // so insertEmoji/insertCustomEmoji create a fresh range
+                    lastActiveRange = null;
+                    anchorNode = null;
+                    focusNode = null;
+                    anchorOffset = 0;
+                    focusOffset = 0;
+                    Actions.UPDATE_HEIGHT();
+                },
                 getHtml: function() { return editor.content.innerHTML; },
                 blur: function() { editor.content.blur(); },
                 focus: function() { focusCurrent(); },
@@ -1823,11 +1979,128 @@ function createHTML(options = {}) {
                 }
             })
 
+            /** Checks if a text node is a zero-width space or whitespace-only spacer. */
+            function isEmojiSpacer(node) {
+                return node && node.nodeType === Node.TEXT_NODE && node.textContent.replace(/[\u200B\u00A0\s]/g, '') === '';
+            }
+
+            /** Removes a custom emoji and cleans up any adjacent spacer text nodes. */
+            function removeEmojiAndCleanup(emojiNode) {
+                var parent = emojiNode.parentNode;
+                // Remove adjacent spacer nodes
+                var next = emojiNode.nextSibling;
+                if (isEmojiSpacer(next)) {
+                    parent.removeChild(next);
+                }
+                var prev = emojiNode.previousSibling;
+                if (isEmojiSpacer(prev)) {
+                    parent.removeChild(prev);
+                }
+                parent.removeChild(emojiNode);
+
+                // Clean up all remaining spacer-only text nodes in the parent
+                var child = parent.firstChild;
+                while (child) {
+                    var nextChild = child.nextSibling;
+                    if (isEmojiSpacer(child)) {
+                        parent.removeChild(child);
+                    }
+                    child = nextChild;
+                }
+
+                // If the parent div is now empty (or only has a <br>), normalize it
+                var editorRoot = editor.content;
+                if (parent !== editorRoot && parent.tagName === 'DIV') {
+                    if (!parent.textContent.trim() && !parent.querySelector('img, span')) {
+                        // Empty line div — keep a single <br> so it behaves as an empty line
+                        parent.innerHTML = '<br>';
+                    }
+                }
+            }
+
             content.addEventListener('beforeinput', (event) => {
               // Get input type and composition status from event
               const { inputType, isComposing, dataTransfer } = event;
               // Get current text content
               const current = content.innerText || "";
+
+              // Handle delete adjacent to custom emoji images
+              if (inputType === 'deleteContentBackward' || inputType === 'deleteContentForward') {
+                const sel = window.getSelection();
+                if (sel.rangeCount > 0) {
+                  const range = sel.getRangeAt(0);
+                  if (range.collapsed) {
+                    const node = range.startContainer;
+                    const offset = range.startOffset;
+
+                    if (inputType === 'deleteContentBackward') {
+                      // Check if previous sibling is a custom emoji (cursor in element node)
+                      if (node.nodeType === Node.ELEMENT_NODE && offset > 0) {
+                        const prev = node.childNodes[offset - 1];
+                        if (prev && isCustomEmoji(prev)) {
+                          event.preventDefault();
+                          removeEmojiAndCleanup(prev);
+                          postContentUpdate();
+                          return;
+                        }
+                      }
+                      // Check if at start of text node and previous sibling is emoji
+                      if (node.nodeType === Node.TEXT_NODE && offset === 0) {
+                        const prev = node.previousSibling;
+                        if (prev && isCustomEmoji(prev)) {
+                          event.preventDefault();
+                          removeEmojiAndCleanup(prev);
+                          postContentUpdate();
+                          return;
+                        }
+                      }
+                      // Check if cursor is in a spacer text node next to an emoji
+                      if (isEmojiSpacer(node)) {
+                        const prev = node.previousSibling;
+                        if (prev && isCustomEmoji(prev)) {
+                          event.preventDefault();
+                          removeEmojiAndCleanup(prev);
+                          postContentUpdate();
+                          return;
+                        }
+                      }
+                    }
+
+                    if (inputType === 'deleteContentForward') {
+                      // Check if next sibling is a custom emoji
+                      if (node.nodeType === Node.ELEMENT_NODE && offset < node.childNodes.length) {
+                        const next = node.childNodes[offset];
+                        if (next && isCustomEmoji(next)) {
+                          event.preventDefault();
+                          removeEmojiAndCleanup(next);
+                          postContentUpdate();
+                          return;
+                        }
+                      }
+                      // Check if at end of text node and next sibling is emoji
+                      if (node.nodeType === Node.TEXT_NODE && offset === node.textContent.length) {
+                        const next = node.nextSibling;
+                        if (next && isCustomEmoji(next)) {
+                          event.preventDefault();
+                          removeEmojiAndCleanup(next);
+                          postContentUpdate();
+                          return;
+                        }
+                      }
+                      // Check if cursor is in a spacer text node before an emoji
+                      if (isEmojiSpacer(node)) {
+                        const next = node.nextSibling;
+                        if (next && isCustomEmoji(next)) {
+                          event.preventDefault();
+                          removeEmojiAndCleanup(next);
+                          postContentUpdate();
+                          return;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
 
               // Allow certain input types to pass through without character limit checks:
               // - Delete operations
@@ -1847,34 +2120,43 @@ function createHTML(options = {}) {
                 return;
               }
 
-              // Check for image paste from Android keyboard (GBoard) via dataTransfer
-              if (${pasteImageListener} && inputType === 'insertFromPaste' && dataTransfer) {
-                var files = dataTransfer.files;
-                if (files && files.length > 0) {
-                  for (var i = 0; i < files.length; i++) {
-                    var file = files[i];
-                    if (file.type.indexOf('image') !== -1) {
-                      event.preventDefault();
-                      var reader = new FileReader();
-                      reader.onload = function(e) {
-                        var base64Data = e.target.result;
-                        var mimeType = file.type || 'image/png';
-                        var fileName = file.name || ('pasted-image-' + Date.now() + '.' + mimeType.split('/')[1]);
-                        postAction({
-                          type: 'IMAGE_PASTED',
-                          data: {
-                            base64: base64Data,
-                            mimeType: mimeType,
-                            fileName: fileName,
-                            fileSize: file.size
-                          }
-                        });
-                      };
-                      reader.readAsDataURL(file);
-                      return;
+              // Defer all paste handling to the paste event listener which sends
+              // CONTENT_PASTED / IMAGE_PASTED to the RN side for proper processing
+              // (mention resolution, custom emoji transformation, etc.).
+              if (inputType === 'insertFromPaste') {
+                event.preventDefault();
+
+                // Image paste from Android keyboard (GBoard) via dataTransfer
+                if (${pasteImageListener} && dataTransfer) {
+                  var files = dataTransfer.files;
+                  if (files && files.length > 0) {
+                    for (var i = 0; i < files.length; i++) {
+                      var file = files[i];
+                      if (file.type.indexOf('image') !== -1) {
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                          var base64Data = e.target.result;
+                          var mimeType = file.type || 'image/png';
+                          var fileName = file.name || ('pasted-image-' + Date.now() + '.' + mimeType.split('/')[1]);
+                          postAction({
+                            type: 'IMAGE_PASTED',
+                            data: {
+                              base64: base64Data,
+                              mimeType: mimeType,
+                              fileName: fileName,
+                              fileSize: file.size
+                            }
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                        return;
+                      }
                     }
                   }
                 }
+
+                // Text paste is handled by the paste event listener
+                return;
               }
 
               // Determine what text the user is trying to insert
