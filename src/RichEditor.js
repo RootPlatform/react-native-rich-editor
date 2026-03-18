@@ -170,6 +170,7 @@ export default class RichTextEditor extends Component {
           onLink?.(data);
           break;
         case messages.LOG:
+          if (__DEV__) console.log('[WebView]', ...(Array.isArray(data) ? data : [data]));
           break;
         case messages.SELECTION_CHANGE:
           // fire the cursor context listener with data from the message

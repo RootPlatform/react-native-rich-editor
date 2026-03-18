@@ -529,7 +529,7 @@ function createHTML(options = {}) {
         }
 
         /** Replaces custom emoji <img> tags with placeholder tokens to protect them from string-based markdown parsing. */
-        const emojiImgRegex = /<img\\s[^>]*class="community-emoji"[^>]*\\/?>/gi;
+        const emojiImgRegex = new RegExp('<img\\\\s[^>]*class="community-emoji"[^>]*\\\\/?>', 'gi');
         function insertEmojiMarkers(html) {
             const emojiPlaceholders = [];
             const updatedHtml = html.replace(emojiImgRegex, match => {
@@ -769,14 +769,19 @@ function createHTML(options = {}) {
             // Update the editor content
             tempDiv.innerHTML = updatedText;
 
+            // Protect custom emoji img tags from markdown parsing
+            const { updatedHtml: htmlWithEmojiMarkers, emojiPlaceholders } = insertEmojiMarkers(tempDiv.innerHTML);
+            tempDiv.innerHTML = htmlWithEmojiMarkers;
+
              // insert mention markers
             const { updatedHtml, mentionPlaceholders } = insertMentionMarkers(tempDiv);
 
             // Parse string to add back markdown syntax
             const parsedHTML = parseTextDecorationFromMarkdown(updatedHtml);
 
-            // Restore mention spans
-            const finalHTML = restoreMentionSpans(parsedHTML, mentionPlaceholders);
+            // Restore mention spans and emoji img tags
+            const restoredMentions = restoreMentionSpans(parsedHTML, mentionPlaceholders);
+            const finalHTML = restoreEmojiImgs(restoredMentions, emojiPlaceholders);
 
             // Update the editor content
             editorContent.innerHTML = finalHTML;
@@ -1261,6 +1266,12 @@ function createHTML(options = {}) {
 
             const img = createCustomEmojiImg(shortcode, emojiId, assetUri);
             range.insertNode(img);
+
+            // Ensure a text node exists BEFORE the emoji so the cursor can be placed between consecutive emojis
+            var prev = img.previousSibling;
+            if (!prev || prev.nodeType !== Node.TEXT_NODE) {
+              img.parentNode.insertBefore(document.createTextNode('\u200B'), img);
+            }
 
             // Place cursor after the img. Only add a zero-width space if there's no text node to anchor to.
             var next = img.nextSibling;
@@ -1915,6 +1926,26 @@ function createHTML(options = {}) {
                 if (ele.nodeName === 'A' && ele.getAttribute('href')) {
                     postAction({type: 'LINK_TOUCHED', data: ele.getAttribute('href')});
                 }
+                // When clicking on a non-editable element (e.g. community emoji img),
+                // ensure adjacent text nodes exist and place cursor after it
+                if (ele.contentEditable === 'false' && ele.parentNode) {
+                    var next = ele.nextSibling;
+                    if (!next || next.nodeType !== Node.TEXT_NODE) {
+                        next = document.createTextNode('\u200B');
+                        ele.parentNode.insertBefore(next, ele.nextSibling);
+                    }
+                    var prev = ele.previousSibling;
+                    if (!prev || prev.nodeType !== Node.TEXT_NODE) {
+                        ele.parentNode.insertBefore(document.createTextNode('\u200B'), ele);
+                    }
+                    var sel = window.getSelection();
+                    var r = document.createRange();
+                    r.setStart(next, next.nodeType === Node.TEXT_NODE ? Math.min(1, next.length) : 0);
+                    r.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(r);
+                    lastActiveRange = r;
+                }
             }
             addEventListener(content, 'touchcancel', handleSelecting);
             addEventListener(content, 'mouseup', handleSelecting);
@@ -1998,12 +2029,17 @@ function createHTML(options = {}) {
                 }
                 parent.removeChild(emojiNode);
 
-                // Clean up all remaining spacer-only text nodes in the parent
+                // Clean up orphaned spacer text nodes (those not adjacent to any emoji)
                 var child = parent.firstChild;
                 while (child) {
                     var nextChild = child.nextSibling;
                     if (isEmojiSpacer(child)) {
-                        parent.removeChild(child);
+                        var adjPrev = child.previousSibling;
+                        var adjNext = child.nextSibling;
+                        var nearEmoji = (adjPrev && isCustomEmoji(adjPrev)) || (adjNext && isCustomEmoji(adjNext));
+                        if (!nearEmoji) {
+                            parent.removeChild(child);
+                        }
                     }
                     child = nextChild;
                 }
@@ -2120,6 +2156,18 @@ function createHTML(options = {}) {
                 return;
               }
 
+              // GBoard pastes as insertText instead of insertFromPaste.
+              // Detect insertText containing 3-colon community emoji patterns and
+              // route through our paste handler so emojis render as images.
+              if (inputType === 'insertText' && event.data && event.data.length > 1) {
+                var emojiPastePattern = new RegExp(':[a-zA-Z0-9_][a-zA-Z0-9_-]*:[a-zA-Z0-9_-]+:');
+                if (emojiPastePattern.test(event.data)) {
+                  event.preventDefault();
+                  postAction({type: 'CONTENT_PASTED', data: event.data});
+                  return;
+                }
+              }
+
               // Defer all paste handling to the paste event listener which sends
               // CONTENT_PASTED / IMAGE_PASTED to the RN side for proper processing
               // (mention resolution, custom emoji transformation, etc.).
@@ -2155,7 +2203,15 @@ function createHTML(options = {}) {
                   }
                 }
 
-                // Text paste is handled by the paste event listener
+                // Extract text from dataTransfer and send to RN side.
+                // GBoard on Android fires insertFromPaste via beforeinput but
+                // does NOT fire the paste event, so we must handle it here.
+                if (dataTransfer) {
+                  var pastedText = dataTransfer.getData('text/plain') || dataTransfer.getData('text') || '';
+                  if (pastedText && ${pasteListener}) {
+                    postAction({type: 'CONTENT_PASTED', data: pastedText});
+                  }
+                }
                 return;
               }
 
