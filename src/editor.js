@@ -281,6 +281,14 @@ function createHTML(options = {}) {
                     _focusCollapse = true;
                     selection.selectAllChildren(editor.content);
                     selection.collapseToEnd();
+                } else if (!selection.anchorNode || !editor.content.contains(selection.anchorNode)) {
+                    // iOS: caret has no valid anchor (e.g. after content was cleared).
+                    // Place it at the start of the contenteditable so typing works.
+                    selection.removeAllRanges();
+                    var r = document.createRange();
+                    r.setStart(editor.content, 0);
+                    r.collapse(true);
+                    selection.addRange(r);
                 }
             } catch(e){
                 console.log(e)
@@ -1698,6 +1706,18 @@ function createHTML(options = {}) {
                     focusNode = null;
                     anchorOffset = 0;
                     focusOffset = 0;
+                    // iOS: when clearing content, explicitly place the caret inside
+                    // the empty div so the next focus has a valid anchor point.
+                    if (!html) {
+                        try {
+                            var sel = window.getSelection();
+                            sel.removeAllRanges();
+                            var r = document.createRange();
+                            r.setStart(editor.content, 0);
+                            r.collapse(true);
+                            sel.addRange(r);
+                        } catch(e) {}
+                    }
                     Actions.UPDATE_HEIGHT();
                 },
                 getHtml: function() { return editor.content.innerHTML; },
@@ -1796,6 +1816,15 @@ function createHTML(options = {}) {
                 // var firstChild = _ref.target.firstChild;
                 if (content.innerHTML === '<br>' || content.innerHTML === '<div><br></div><br>' || content.innerHTML === '<div><br></div>' || (lastContent === '<div><br></div><div><br></div>' && content.innerHTML === '<div><br></div>')){
                     content.innerHTML = '';
+                    // iOS: after emptying the contenteditable, the caret loses its
+                    // anchor and the user cannot type until focus is cycled.  Reset
+                    // the selection so the caret is placed inside the empty div.
+                    var sel = window.getSelection();
+                    sel.removeAllRanges();
+                    var r = document.createRange();
+                    r.setStart(content, 0);
+                    r.collapse(true);
+                    sel.addRange(r);
                 } else if (enterStatus && queryCommandValue(formatBlock) === 'blockquote') {
                     formatParagraph();
                 }
