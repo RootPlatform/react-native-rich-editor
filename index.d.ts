@@ -254,7 +254,7 @@ export type SelectionChangeListener = (items: (string | {type: string; value: st
 
 export type CursorContext =  {
    type: 'cursor';
-   decorators: { bold: boolean; italic: boolean; strikeThrough: boolean };
+   decorators: { bold: boolean; italic: boolean; strikeThrough: boolean; spoiler: boolean };
    channelMention: string;
    userMention: string;
    emojiShortcodeMention: string;

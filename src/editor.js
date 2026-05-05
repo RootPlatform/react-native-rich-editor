@@ -15,6 +15,7 @@ function getContentCSS() {
         hr{display: block;height: 0; border: 0;border-top: 1px solid #ccc; margin: 15px 0; padding: 0;}
         pre{padding: 10px 5px 10px 10px;margin: 15px 0;display: block;line-height: 18px;background: #F0F0F0;border-radius: 6px;font-size: 13px; font-family: 'monaco', 'Consolas', "Liberation Mono", Courier, monospace; word-break: break-all; word-wrap: break-word;overflow-x: auto;}
         pre code {display: block;font-size: inherit;white-space: pre-wrap;color: inherit;}
+        .spoiler {background-color: rgba(80, 80, 90, 0.45); border-radius: 3px; padding: 0 2px;}
     </style>
     `;
 }
@@ -557,10 +558,10 @@ function createHTML(options = {}) {
         /**
         * String parsing function to add markdown elements to the editor content
         */
-        const TEXT_DECORATION_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7/g;
+        const TEXT_DECORATION_REGEX =  /(\\*\\*\\*|___)(?!\\1)(.*?)\\1|(\\*\\*|__)(?!\\3)(.*?)\\3|(\\*|_)(?!\\5)(.*?)\\5|(~~)(?!\\7)(.*?)\\7|(\\|\\|)(?!\\9)(.*?)\\9/g;
         function parseTextDecorationFromMarkdown(html) {
             return html.replace(TEXT_DECORATION_REGEX, function(
-                match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent
+                match, boldItalic, biContent, bold, bContent, italic, iContent, strike, sContent, spoiler, spContent
             ) {
                 if (boldItalic && biContent && !isMatchOnSelectionMarkers(biContent) && !matchContainsNewline(biContent)) {
                 return applyMarkdownSyntax(boldItalic) +
@@ -578,6 +579,10 @@ function createHTML(options = {}) {
                 return applyMarkdownSyntax(strike) +
                     '<s>' + sContent + '</s>' +
                     applyMarkdownSyntax(strike);
+                } else if (spoiler && spContent && !isMatchOnSelectionMarkers(spContent) && !matchContainsNewline(spContent)) {
+                return applyMarkdownSyntax(spoiler) +
+                    '<span class="spoiler">' + spContent + '</span>' +
+                    applyMarkdownSyntax(spoiler);
                 }
                 return match;
             });
@@ -668,7 +673,7 @@ function createHTML(options = {}) {
 
             // Helper function to check if a character should stop the traversal
             function isStopCharacter(char) {
-                return !char.trim() || char === "\\s+" || char === "*" || char === "\`" || char === "~";
+                return !char.trim() || char === "\\s+" || char === "*" || char === "\`" || char === "~" || char === "|";
             }
 
             // Look backward from the start of the selection
@@ -695,7 +700,8 @@ function createHTML(options = {}) {
             italic: '*',
             bold: '**',
             strikeThrough: '~~',
-            code: '\`'
+            code: '\`',
+            spoiler: '||'
         };
 
         /**
@@ -927,6 +933,10 @@ function createHTML(options = {}) {
             if (parent.nodeName === 'I' && nodeName === 'B') {
                 parent = parent.parentNode;
             }
+            // spoiler is a class-marked span, not a dedicated tag
+            if (nodeName === 'SPOILER') {
+                return parent.nodeName === 'SPAN' && parent.classList && parent.classList.contains('spoiler');
+            }
             return parent.nodeName === nodeName;
         };
 
@@ -935,6 +945,7 @@ function createHTML(options = {}) {
             italic: 'I',
             bold: 'B',
             strikeThrough: 'S',
+            spoiler: 'SPOILER',
         };
 
         // Track the last content value
@@ -2298,7 +2309,7 @@ function createHTML(options = {}) {
                 // basic cursor data - determine if current range is in a bold or italic block
                 // and check for mention characters
                 const range = window.getSelection().getRangeAt(0);
-                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false }, channelMention: '', userMention: '', emojiShortcodeMention: '' };
+                const cursorData = { type: 'cursor', decorators: { bold: false, italic: false, strikeThrough: false, spoiler: false }, channelMention: '', userMention: '', emojiShortcodeMention: '' };
                 if (range) {
 
                     // update selection boundaries to ensure the cursor is in the right place
@@ -2316,7 +2327,11 @@ function createHTML(options = {}) {
                     if (isStrikeThrough) {
                         cursorData.decorators.strikeThrough = true;
                     }
-                    if (!isBold && !isItalic && !isStrikeThrough) {
+                    const isSpoiler = determineSelectionDecorator(range, ALLOWED_SYNTAX_TAGS.spoiler);
+                    if (isSpoiler) {
+                        cursorData.decorators.spoiler = true;
+                    }
+                    if (!isBold && !isItalic && !isStrikeThrough && !isSpoiler) {
                         const insertionMarker = checkForInsertionMarkerAroundCursor();
                         if (insertionMarker) {
                             cursorData[markerToFieldMap[insertionMarker.character]] = insertionMarker.mention;
