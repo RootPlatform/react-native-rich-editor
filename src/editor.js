@@ -1487,7 +1487,7 @@ function createHTML(options = {}) {
           return false;
         }
 
-        const pairRegex = /(\\*{1,3}|_{1,3}|~{2})(?=\\S)([\\s\\S]*?\\S)\\1/g;
+        const pairRegex = /(\\*{1,3}|_{1,3}|~{2}|\\|{2})(?=\\S)([\\s\\S]*?\\S)\\1/g;
         let prevPairCount = 0;
         /**
          * Counts the number of balanced markdown pairs in the content.
@@ -1504,7 +1504,7 @@ function createHTML(options = {}) {
          */
         function shouldParseMarkdown(inputType, data) {
           // typed a marker
-          if (inputType === 'insertText' && /[\\*_~]/.test(data)) return true;
+          if (inputType === 'insertText' && /[\\*_~|]/.test(data)) return true;
           // deleted content
           if (inputType === 'deleteContentBackward' ||
               inputType === 'deleteContentForward') {
